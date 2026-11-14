@@ -42,9 +42,9 @@ public:
                 _userCb();
 
                 auto now = steady_clock::now();
-                // Skip deadlines missed by a callback that overran its period instead of running back to back.
-                while (end_time <= now && period > milliseconds(0)) {
-                    end_time += period;
+                // A callback that overran its period runs again right away, and the schedule restarts from now.
+                if (end_time < now) {
+                    end_time = now;
                 }
                 // Sleep in slices of at most 500ms so that stop() does not wait for a long period to end.
                 while (now < end_time && _isActive) {
