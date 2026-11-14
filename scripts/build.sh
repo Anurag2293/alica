@@ -3,6 +3,7 @@
 # Each package is installed into ./install so the next one can find_package() it.
 #
 # Usage: scripts/build.sh [--clean] [--no-test] [package ...]
+# TEST_JOBS sets how many tests run in parallel (default: number of CPUs).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,7 +31,7 @@ for arg in "$@"; do
   case "$arg" in
     --clean) clean=1 ;;
     --no-test) test=0 ;;
-    -h|--help) sed -n 2,5p "$0"; exit 0 ;;
+    -h|--help) sed -n 2,6p "$0"; exit 0 ;;
     *) selected+=("$arg") ;;
   esac
 done
@@ -39,6 +40,7 @@ if [ ${#selected[@]} -gt 0 ]; then PACKAGES=("${selected[@]}"); fi
 if [ "$clean" = 1 ]; then rm -rf "$BUILD" "$INSTALL"; fi
 
 if command -v nproc >/dev/null; then JOBS=$(nproc); else JOBS=$(sysctl -n hw.ncpu); fi
+TEST_JOBS="${TEST_JOBS:-$JOBS}"
 GENERATOR=(-G "Unix Makefiles")
 if command -v ninja >/dev/null; then GENERATOR=(-G Ninja); fi
 
@@ -56,7 +58,7 @@ for pkg in "${PACKAGES[@]}"; do
   cmake --build "$BUILD/$name" -j "$JOBS"
   cmake --install "$BUILD/$name"
   if [ "$test" = 1 ] && [ -f "$BUILD/$name/CTestTestfile.cmake" ]; then
-    ctest --test-dir "$BUILD/$name" --output-on-failure -j "$JOBS" || failed+=("$name")
+    ctest --test-dir "$BUILD/$name" --output-on-failure -j "$TEST_JOBS" || failed+=("$name")
   fi
 done
 

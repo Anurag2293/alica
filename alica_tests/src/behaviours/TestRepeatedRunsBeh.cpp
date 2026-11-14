@@ -34,7 +34,7 @@ void TestRepeatedRunsBeh::run()
         AlicaTime duration = _end - _start;
         if (std::abs(_callCounter - duration.inMilliseconds() * _frequency / 1000) < 5) {
             setSuccess();
-        } else {
+        } else if (!isFailure()) {
             Logging::logWarn("TestRepeatedRunsBeh") << _callCounter << " run calls in " << duration.inMilliseconds() << "ms at " << _frequency
                                                     << "Hz, longest gap " << _maxGap.inMilliseconds() << "ms";
             setFailure();
