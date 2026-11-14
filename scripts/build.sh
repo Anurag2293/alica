@@ -39,7 +39,7 @@ if [ ${#selected[@]} -gt 0 ]; then PACKAGES=("${selected[@]}"); fi
 if [ "$clean" = 1 ]; then rm -rf "$BUILD" "$INSTALL"; fi
 
 if command -v nproc >/dev/null; then JOBS=$(nproc); else JOBS=$(sysctl -n hw.ncpu); fi
-GENERATOR=()
+GENERATOR=(-G "Unix Makefiles")
 if command -v ninja >/dev/null; then GENERATOR=(-G Ninja); fi
 
 PREFIX_PATH="$INSTALL"
