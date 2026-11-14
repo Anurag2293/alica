@@ -32,6 +32,8 @@ jobs:
         run: scripts/build.sh
         env:
           TEST_JOBS: 1
+          # The macOS runner cannot hold a 30 Hz timer, which this test measures.
+          TEST_EXCLUDE: ${{ runner.os == 'macOS' && 'testRepeatedRunSchedulingTest' || '' }}
   ROS2_build_test:
     runs-on: "${{ matrix.os }}"
     timeout-minutes: 15

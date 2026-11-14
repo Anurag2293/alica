@@ -4,6 +4,7 @@
 #
 # Usage: scripts/build.sh [--clean] [--no-test] [package ...]
 # TEST_JOBS sets how many tests run in parallel (default: number of CPUs).
+# TEST_EXCLUDE is a regular expression of test names to skip.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -31,7 +32,7 @@ for arg in "$@"; do
   case "$arg" in
     --clean) clean=1 ;;
     --no-test) test=0 ;;
-    -h|--help) sed -n 2,6p "$0"; exit 0 ;;
+    -h|--help) sed -n 2,7p "$0"; exit 0 ;;
     *) selected+=("$arg") ;;
   esac
 done
@@ -41,6 +42,8 @@ if [ "$clean" = 1 ]; then rm -rf "$BUILD" "$INSTALL"; fi
 
 if command -v nproc >/dev/null; then JOBS=$(nproc); else JOBS=$(sysctl -n hw.ncpu); fi
 TEST_JOBS="${TEST_JOBS:-$JOBS}"
+TEST_ARGS=(-j "$TEST_JOBS")
+if [ -n "${TEST_EXCLUDE:-}" ]; then TEST_ARGS+=(-E "$TEST_EXCLUDE"); fi
 GENERATOR=(-G "Unix Makefiles")
 if command -v ninja >/dev/null; then GENERATOR=(-G Ninja); fi
 
@@ -58,7 +61,7 @@ for pkg in "${PACKAGES[@]}"; do
   cmake --build "$BUILD/$name" -j "$JOBS"
   cmake --install "$BUILD/$name"
   if [ "$test" = 1 ] && [ -f "$BUILD/$name/CTestTestfile.cmake" ]; then
-    ctest --test-dir "$BUILD/$name" --output-on-failure -j "$TEST_JOBS" || failed+=("$name")
+    ctest --test-dir "$BUILD/$name" --output-on-failure "${TEST_ARGS[@]}" || failed+=("$name")
   fi
 done
 
