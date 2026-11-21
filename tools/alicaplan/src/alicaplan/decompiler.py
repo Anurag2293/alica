@@ -506,4 +506,3 @@ def decompile_docs(docs, keep_ids=True):
     if bad:
         raise DecompileError("cannot decompile files that do not parse: " + ", ".join(bad))
     return Decompiler(docs, keep_ids).decompile()
-
