@@ -316,14 +316,28 @@ class Compiler:
         data = {key: spec.get(key, default) for key, default in COND_DEFAULTS.items()}
         data["id"] = self.ident(spec, qualified)
         quantifiers = []
-        for quant in data["quantifiers"] or []:
-            if isinstance(quant, dict) and isinstance(quant.get("scope"), str):
-                scope = quant["scope"]
+        for index, quant in enumerate(data["quantifiers"] or []):
+            if not isinstance(quant, dict):
+                self.err(where, f"quantifier must be a mapping, got {quant!r}")
+                continue
+            if not self.check_keys(where + ".quantifiers", quant, {"id", "name", "comment", "quantifierType", "scope", "sorts"}):
+                continue
+            scope = quant.get("scope")
+            if isinstance(scope, str):
                 if scopes is None or scope not in scopes:
-                    self.err(where, f"quantifier scope {scope!r} must be 'plan', a state or 'ep:<task>' of this plan")
+                    self.err(where, f"quantifier scope {scope!r} must be 'plan', 'state:<name>' or 'ep:<task>' of this plan")
                 else:
-                    quant = dict(quant, scope=scopes[scope])
-            quantifiers.append(quant)
+                    scope = scopes[scope]
+            quantifiers.append(
+                {
+                    "comment": quant.get("comment", ""),
+                    "id": self.ident(quant, f"{qualified}/quantifier:{index}"),
+                    "name": quant.get("name", ""),
+                    "quantifierType": quant.get("quantifierType", "all"),
+                    "scope": scope,
+                    "sorts": quant.get("sorts", []),
+                }
+            )
         if data["quantifiers"]:
             data["quantifiers"] = quantifiers
         return data
@@ -556,7 +570,7 @@ class Compiler:
             )
 
         scopes = {"plan": el.id}
-        scopes.update(state_ids)
+        scopes.update({f"state:{key}": sid for key, sid in state_ids.items()})
         for ep_key, ep in zip(ep_keys, eps_spec):
             if isinstance(ep, dict):
                 scopes[f"ep:{ep_key}"] = self.ident(ep, f"{q}/ep:{ep_key}")

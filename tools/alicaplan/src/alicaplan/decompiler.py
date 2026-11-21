@@ -124,10 +124,17 @@ class Decompiler:
             return None
         out = {}
         self.defaults(out, cond, COND_DEFAULTS)
-        if out.get("quantifiers") and scopes:
-            out["quantifiers"] = [
-                dict(q, scope=scopes[q["scope"]]) if isinstance(q, dict) and q.get("scope") in scopes else q for q in out["quantifiers"]
-            ]
+        if out.get("quantifiers"):
+            quantifiers = []
+            for quant in out["quantifiers"]:
+                if isinstance(quant, dict):
+                    quant = dict(quant)
+                    if scopes and quant.get("scope") in scopes:
+                        quant["scope"] = scopes[quant["scope"]]
+                    if not self.keep_ids:
+                        quant.pop("id", None)
+                quantifiers.append(quant)
+            out["quantifiers"] = quantifiers
         self.put_id(out, cond)
         return out
 
@@ -358,7 +365,7 @@ class Decompiler:
         where = doc.relpath
         ep_refs = [self.ref_task(ep["task"]) for ep in data["entryPoints"]]
         scopes = {data["id"]: "plan"}
-        scopes.update(skeys)
+        scopes.update({sid: f"state:{key}" for sid, key in skeys.items()})
         for ep, ep_key in zip(data["entryPoints"], dup_keys([str(r) for r in ep_refs], " #")):
             scopes[ep["id"]] = f"ep:{ep_key}"
         for key in ("pre", "runtime"):

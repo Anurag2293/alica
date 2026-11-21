@@ -270,3 +270,32 @@ def test_named_and_unnamed_terminal_states():
         ("Failure", "TerminalState", False),
         ("Failure2", "TerminalState", False),
     ]
+
+
+def test_quantifiers_get_ids_and_named_scopes():
+    data = copy.deepcopy(BASE)
+    plan(data)["states"]["plan"] = ["B"]
+    plan(data)["transitions"].append({"A -> plan": "C"})
+    plan(data)["pre"] = {
+        "quantifiers": [
+            {"scope": "plan", "sorts": ["X"]},
+            {"scope": "state:plan", "sorts": ["Y"]},
+            {"scope": "ep:T", "sorts": ["Z"]},
+        ]
+    }
+    docs = compile_modules((data, None))
+    assert check_docs(docs) == []
+    p = next(d for d in docs if d.kind == "plan").data
+    state_id = next(s["id"] for s in p["states"] if s["name"] == "plan")
+    quants = p["preCondition"]["quantifiers"]
+    assert [q["scope"] for q in quants] == [p["id"], state_id, p["entryPoints"][0]["id"]]
+    assert all(q["quantifierType"] == "all" and isinstance(q["id"], int) for q in quants)
+    assert len({q["id"] for q in quants}) == 3
+
+
+def test_unknown_quantifier_scope_is_a_compile_error():
+    data = copy.deepcopy(BASE)
+    plan(data)["pre"] = {"quantifiers": [{"scope": "A", "sorts": []}]}
+    with pytest.raises(CompileError) as info:
+        compile_modules((data, None))
+    assert "'state:<name>'" in str(info.value)

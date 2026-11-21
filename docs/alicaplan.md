@@ -178,8 +178,8 @@ roleset:           {name, defaultPriority [0.5], defaultRoleSet [true],
 
 ### Condition objects
 
-`pre`, `runtime` and `post` take `{name, conditionString, enabled [true], quantifiers, variables}`. Every transition gets one as its `preCondition`. In a plan, a quantifier `scope` may
-be written as `plan`, a state name or `ep:<task>`.
+`pre`, `runtime` and `post` take `{name, conditionString, enabled [true], quantifiers, variables}`. Every transition gets one as its `preCondition`. A quantifier is `{scope, sorts, quantifierType [all], name}`; in a plan, its `scope` may be
+written as `plan`, `state:<name>` or `ep:<task>`.
 
 ### Ids
 
