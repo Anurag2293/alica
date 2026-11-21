@@ -98,3 +98,12 @@ def test_docs_example_compiles_clean(tmp_path):
     (src / "example.alica.yaml").write_text(text[start : text.index("```", start)])
     assert main(["compile", str(src), "-o", str(tmp_path / "etc")]) == 0
     assert check_docs(load_dirs([tmp_path / "etc"])) == []
+
+
+def test_compile_with_missing_or_empty_source_leaves_output_alone(tmp_path):
+    main(["compile", str(EXAMPLE), "-o", str(tmp_path / "etc")])
+    before = model_files(tmp_path / "etc")
+    assert main(["compile", str(tmp_path / "missing"), "-o", str(tmp_path / "etc"), "--clean"]) == 2
+    (tmp_path / "empty").mkdir()
+    assert main(["compile", str(tmp_path / "empty"), "-o", str(tmp_path / "etc"), "--clean"]) == 1
+    assert model_files(tmp_path / "etc") == before

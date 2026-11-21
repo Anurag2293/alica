@@ -32,11 +32,17 @@ def cmd_check(args):
 
 
 def cmd_compile(args):
+    if not os.path.isdir(args.src):
+        print(f"not a directory: {args.src}", file=sys.stderr)
+        return 2
     try:
         docs = compile_dir(args.src)
     except CompileError as e:
         for message in e.messages:
             print(f"error: {message}", file=sys.stderr)
+        return 1
+    if not docs:
+        print(f"error: no *.alica.yaml modules with elements in {args.src}", file=sys.stderr)
         return 1
     findings = check_docs(docs)
     errors = print_findings(findings, args.quiet)
@@ -57,6 +63,9 @@ def cmd_compile(args):
 
 
 def cmd_decompile(args):
+    if not os.path.isdir(args.dir):
+        print(f"not a directory: {args.dir}", file=sys.stderr)
+        return 2
     docs = load_dirs([args.dir])
     try:
         files = decompile_docs(docs, keep_ids=not args.no_ids)
