@@ -50,6 +50,14 @@ protected:
     const char* getMasterPlanName() const override { return "TestParameterPassingMaster"; }
     bool stepEngine() const override { return false; }
 
+    int passedParameter(const std::string& key)
+    {
+        std::shared_ptr<alicaTests::TestWorldModel> wm =
+                LockedBlackboardRW(ac->editGlobalBlackboard()).get<std::shared_ptr<alicaTests::TestWorldModel>>("worldmodel");
+        auto it = wm->passedParameters.find(key);
+        return it == wm->passedParameters.end() ? 0 : it->second;
+    }
+
     template <class SrcType, class TargetType>
     bool checkMapping(const std::string& srcTypeName, const SrcType& srcValue, const std::string& targetTypeName, const TargetType& targetValue)
     {
@@ -167,53 +175,43 @@ TEST_F(TestBlackboard, testJsonTwoBehaviorKeyMapping)
 {
     // Two parent values mapped to same behavior input value to differentiate call contexts
     ae->start();
-    ae->getAlicaClock().sleep(alica::AlicaTime::milliseconds(200));
+    SLEEP_UNTIL(passedParameter("behaviorInputKey") == 5 && passedParameter("behaviorSecondInputKey") == 7);
 
-    std::shared_ptr<alicaTests::TestWorldModel> wm =
-            LockedBlackboardRW(ac->editGlobalBlackboard()).get<std::shared_ptr<alicaTests::TestWorldModel>>("worldmodel");
-    EXPECT_EQ(wm->passedParameters["behaviorInputKey"], 5);       // Value set in first behavior call
-    EXPECT_EQ(wm->passedParameters["behaviorSecondInputKey"], 7); // Value set in second behavior call
+    EXPECT_EQ(passedParameter("behaviorInputKey"), 5);       // Value set in first behavior call
+    EXPECT_EQ(passedParameter("behaviorSecondInputKey"), 7); // Value set in second behavior call
 }
 
 TEST_F(TestBlackboard, testJsonPlanKeyMapping)
 {
     // Pass values of mapped keys form a plan into another plan
     ae->start();
-    ae->getAlicaClock().sleep(alica::AlicaTime::milliseconds(200));
-    std::shared_ptr<alicaTests::TestWorldModel> wm =
-            LockedBlackboardRW(ac->editGlobalBlackboard()).get<std::shared_ptr<alicaTests::TestWorldModel>>("worldmodel");
-    EXPECT_EQ(wm->passedParameters["planInputFromMaster"], 8);
+    SLEEP_UNTIL(passedParameter("planInputFromMaster") == 8);
+    EXPECT_EQ(passedParameter("planInputFromMaster"), 8);
 }
 
 TEST_F(TestBlackboard, testJsonBehaviorKeyMapping)
 {
     // Pass values of mapped keys form a plan into a behavior and out of a bahavior into a plan
     ae->start();
-    ae->getAlicaClock().sleep(alica::AlicaTime::milliseconds(200));
-    std::shared_ptr<alicaTests::TestWorldModel> wm =
-            LockedBlackboardRW(ac->editGlobalBlackboard()).get<std::shared_ptr<alicaTests::TestWorldModel>>("worldmodel");
-    EXPECT_EQ(wm->passedParameters["behaviorInputKey"], 5); // Value set in plan init -> read in behavior
-    EXPECT_EQ(wm->passedParameters["planInputKey"], 6);     // Value set in behavior -> read in plan termination
+    SLEEP_UNTIL(passedParameter("behaviorInputKey") == 5 && passedParameter("planInputKey") == 6);
+    EXPECT_EQ(passedParameter("behaviorInputKey"), 5); // Value set in plan init -> read in behavior
+    EXPECT_EQ(passedParameter("planInputKey"), 6);     // Value set in behavior -> read in plan termination
 }
 
 TEST_F(TestBlackboard, testJsonBlackboardPlan)
 {
     // Check if a key defined in json of a plan is accessible
     ae->start();
-    ae->getAlicaClock().sleep(alica::AlicaTime::milliseconds(100));
-    std::shared_ptr<alicaTests::TestWorldModel> wm =
-            LockedBlackboardRW(ac->editGlobalBlackboard()).get<std::shared_ptr<alicaTests::TestWorldModel>>("worldmodel");
-    EXPECT_EQ(wm->passedParameters["planKey"], 1);
+    SLEEP_UNTIL(passedParameter("planKey") == 1);
+    EXPECT_EQ(passedParameter("planKey"), 1);
 }
 
 TEST_F(TestBlackboard, testJsonBlackboardBehavior)
 {
     // Check if a key defined in json of a behavior is accessible
     ae->start();
-    ae->getAlicaClock().sleep(alica::AlicaTime::milliseconds(100));
-    std::shared_ptr<alicaTests::TestWorldModel> wm =
-            LockedBlackboardRW(ac->editGlobalBlackboard()).get<std::shared_ptr<alicaTests::TestWorldModel>>("worldmodel");
-    EXPECT_EQ(wm->passedParameters["behaviorKey"], 2);
+    SLEEP_UNTIL(passedParameter("behaviorKey") == 2);
+    EXPECT_EQ(passedParameter("behaviorKey"), 2);
 }
 
 TEST_F(TestBlackboard, testNotInheritBlackboardFlag)
