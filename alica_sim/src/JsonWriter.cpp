@@ -1,8 +1,8 @@
 #include "alica_sim/JsonWriter.h"
+#include "alica_sim/Numeric.h"
 
 #include <yaml-cpp/yaml.h>
 
-#include <cmath>
 #include <cstdio>
 #include <stdexcept>
 
@@ -120,7 +120,7 @@ JsonWriter& JsonWriter::value(const YAML::Node& node)
                 return value(i);
             }
             double d = 0;
-            if (YAML::convert<double>::decode(node, d) && std::isfinite(d)) {
+            if (decodeFiniteDouble(node, d)) {
                 return value(d);
             }
         }
@@ -140,10 +140,10 @@ void JsonWriter::clear()
 
 std::string JsonWriter::formatDouble(double v)
 {
-    if (!std::isfinite(v)) {
+    if (!isFinite(v)) {
         return "null";
     }
-    char buf[64];
+    char buf[512];
     std::snprintf(buf, sizeof(buf), "%.6f", v);
     std::string s(buf);
     size_t dot = s.find('.');

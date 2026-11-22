@@ -36,11 +36,14 @@ add_library(${PROJECT_NAME} SHARED
   src/Match.cpp
   src/MatchConfig.cpp
   src/MessageBus.cpp
+  src/Numeric.cpp
   src/PlanFiles.cpp
   src/Runner.cpp
   src/Scheduler.cpp
   src/Sha256.cpp
 )
+
+set_source_files_properties(src/Numeric.cpp PROPERTIES COMPILE_OPTIONS -fno-finite-math-only)
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -98,6 +101,12 @@ if(BUILD_TESTING)
   target_link_libraries(${PROJECT_NAME}-test PRIVATE ${PROJECT_NAME} GTest::gtest GTest::gtest_main Threads::Threads)
   add_dependencies(${PROJECT_NAME}-test alica_sim_test_world alica_sim_test_team alica_sim_run)
   gtest_discover_tests(${PROJECT_NAME}-test)
+
+  add_executable(${PROJECT_NAME}-fast-math-test test/test_fast_math.cpp src/JsonWriter.cpp src/Numeric.cpp)
+  target_include_directories(${PROJECT_NAME}-fast-math-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_options(${PROJECT_NAME}-fast-math-test PRIVATE -O2 -ffast-math)
+  target_link_libraries(${PROJECT_NAME}-fast-math-test PRIVATE alica_engine ${YAML_CPP_LIBRARIES} GTest::gtest GTest::gtest_main Threads::Threads)
+  gtest_discover_tests(${PROJECT_NAME}-fast-math-test)
 
   add_test(NAME alica_sim_run_test
     COMMAND alica_sim_run ${CMAKE_CURRENT_SOURCE_DIR}/test/match.yaml
