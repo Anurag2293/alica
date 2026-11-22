@@ -178,6 +178,13 @@ set_target_properties(alica_load_plans PROPERTIES INSTALL_RPATH "${ALICA_TOOL_RP
 ## Install ##
 #############
 
+if(APPLE)
+  set(ALICA_LIBRARY_RPATH "@loader_path")
+else()
+  set(ALICA_LIBRARY_RPATH "$ORIGIN")
+endif()
+set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "${ALICA_LIBRARY_RPATH}" INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 install(TARGETS ${PROJECT_NAME}
   EXPORT ${CMAKE_PROJECT_NAME}Targets
   ARCHIVE DESTINATION lib
