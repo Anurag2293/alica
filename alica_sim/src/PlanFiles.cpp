@@ -263,6 +263,9 @@ std::set<std::string> planTreeLibraries(const std::vector<std::string>& folders,
         std::vector<Reference> references;
         scan(load(path), path, ext == ".pml" || ext == ".beh", libraries, references);
         for (const Reference& ref : references) {
+            if (extension(ref.file) == ".plh") {
+                throw ConfigError(path + " references the placeholder " + ref.file + ", and alica_sim does not support placeholder mappings");
+            }
             if (extension(ref.file) == ".cnd") {
                 conditionIds[ref.file].insert(ref.id);
             }

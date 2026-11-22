@@ -194,6 +194,8 @@ team's folders:
   `0 < MinBroadcastFrequency <= MaxBroadcastFrequency <= EngineFrequency`, the status message
   frequency does not exceed the engine frequency and `UseStaticRoles` is true.
 - An `Alica.yaml` in a team's plan folders is a config error.
+- A placeholder (`.plh`) anywhere in the master plan's tree is a config error: alica_sim v0
+  passes no placeholder mapping, and the engine aborts on a placeholder without one.
 - Plan folders are searched like the engine's `FileSystem::findFile`: depth first, entries in
   `scandir`/`alphasort` order (the process locale's collation), following symlinked
   directories. A symlink cycle (a directory inside itself) is a config error, because the
@@ -374,6 +376,8 @@ at least 1 ns, `duration` at least `dt`, both at most 4e9 s; infinity and NaN ar
 - A behaviour that stops the match from `init` ends it at once: no later entry fires, no frame
   follows, and the result line is last.
 - A replay write or flush failure, including a file size limit in the runner, fails the match.
+- A placeholder in the plan tree (`alica_tests/etc`, `PlaceholderTestPlan`) makes the runner exit
+  1 with a config error.
 
 ## Later
 

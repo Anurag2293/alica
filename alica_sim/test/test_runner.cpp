@@ -75,6 +75,18 @@ TEST_F(RunnerTest, ASymlinkCycleBeforeTheMasterPlanExitsWithAConfigError)
     EXPECT_EQ(read("stdout"), "");
 }
 
+TEST_F(RunnerTest, APlaceholderInThePlanTreeExitsWithAConfigError)
+{
+    const std::string etc = ALICA_SIM_TEST_DIR "/../../alica_tests/etc/";
+    const fs::path file = dir / "match.yaml";
+    std::ofstream(file) << "{world: {plugin: alica_sim_test_world}, duration: 0.1, teams: [{name: T, plans: [" << etc << "plans, " << etc << "placeholders, "
+                        << etc << "behaviours, " << etc << "conditions, " << etc << "tasks, " << etc
+                        << "roles], roleSet: Roleset, masterPlan: PlaceholderTestPlan, players: [{name: p, id: 1, local: {DefaultRole: Attacker}}]}]}\n";
+    EXPECT_EQ(run(file.string()), 1);
+    EXPECT_NE(read("stderr").find("does not support placeholder mappings"), std::string::npos) << read("stderr");
+    EXPECT_EQ(read("stdout"), "");
+}
+
 TEST_F(RunnerTest, AReplayThatCannotBeOpenedExitsWithAnError)
 {
     EXPECT_EQ(run(writeConfig("Player") + " --out '" + (dir / "missing/replay.jsonl").string() + "'"), 1);
