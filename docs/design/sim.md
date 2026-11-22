@@ -163,11 +163,14 @@ for both timer factories; `SimCommunication` on the team's bus; a logger. Creato
 team's `TeamFactory`. The agent's engine configuration is generated, never read from a
 team's folders:
 
-- Player names and ids are unique across the match; duplicates are a config error.
-- The runner writes `<work>/<team>/<agent>/Alica.yaml` from the `alica_sim` defaults, the match's
-  `engine` section and the player's `local` section (for example `Local.DefaultRole`), always
-  with `Alica.SimulatedTime: true`, and puts `<work>/<team>` first on the agent's config paths, where
-  `AlicaContext::initConfig` looks for `<agent>/Alica.yaml` before anything else.
+- Player names match `[A-Za-z0-9_-]+` and, with ids, are unique across the match, names
+  compared case-insensitively; anything else is a config error.
+- The runner writes `<work>/<n>/<agent>/Alica.yaml`, where `<n>` is the agent's index in the
+  match, from the `alica_sim` defaults, the match's `engine` section and the player's `local`
+  section (for example `Local.DefaultRole`), always with `Alica.SimulatedTime: true`. It puts
+  `<work>/<n>` first on the agent's config paths, where `AlicaContext::initConfig` looks for
+  `<agent>/Alica.yaml` before anything else. Each root holds only one agent's file, so the
+  recursive lookup cannot find another agent's config.
 - An `Alica.yaml` in a team's plan folders is a config error.
 - Engine settings are match-wide. Some are process-wide statics in the engine
   (`Alica.AllowIdling`, `Alica.AssignmentProtectionTime`), so per-team values would silently
@@ -208,7 +211,8 @@ callback runs before them, so nothing consumes an input earlier than its time:
 4. `scheduler.runUntil(t + dt)`: engine loops and behaviour runs due in `[t, t + dt)`, each at
    its own due time. Messages they send are delivered at the next tick's start, never earlier
    than they were sent.
-5. `world.step(t, dt)`, then `t += dt`.
+5. `world.step(t, dt)`, then `t += dt` and `matchTime.set(t)`, so anything after the tick
+   (recording, `stop()` and termination hooks) sees the tick's end time.
 6. Record a frame if `tick % recordEvery == 0`.
 
 Agents are created and started in config order: teams in order, players in order.
