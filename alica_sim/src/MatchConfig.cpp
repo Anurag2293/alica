@@ -1,4 +1,5 @@
 #include "alica_sim/MatchConfig.h"
+#include "alica_sim/Numeric.h"
 
 #include <algorithm>
 #include <cctype>
@@ -132,11 +133,6 @@ std::vector<std::string> pathList(const YAML::Node& node, const std::string& key
     return paths;
 }
 
-AlicaTime seconds(double s)
-{
-    return AlicaTime::nanoseconds(std::llround(s * 1e9));
-}
-
 void flatten(const YAML::Node& node, const std::string& prefix, std::vector<std::pair<std::string, YAML::Node>>& out)
 {
     for (const auto& kv : node) {
@@ -172,12 +168,54 @@ std::string lower(std::string s)
     return s;
 }
 
-double inSeconds(AlicaTime t)
+} // namespace
+
+AlicaTime parseSeconds(const YAML::Node& node, const std::string& key)
 {
-    return static_cast<double>(t.inNanoseconds()) / 1e9;
+    constexpr int64_t kMaxSeconds = 4000000000;
+    const std::string where = "match config: '" + key + "'";
+    if (!node.IsScalar()) {
+        throw ConfigError(where + " must be a number of seconds");
+    }
+    const std::string& s = node.Scalar();
+    size_t i = s.size() > 0 && s[0] == '+' ? 1 : 0;
+    std::string whole;
+    std::string fraction;
+    for (; i < s.size() && std::isdigit(static_cast<unsigned char>(s[i])); ++i) {
+        whole += s[i];
+    }
+    if (i < s.size() && s[i] == '.') {
+        for (++i; i < s.size() && std::isdigit(static_cast<unsigned char>(s[i])); ++i) {
+            fraction += s[i];
+        }
+    }
+    if (i == s.size() && !(whole.empty() && fraction.empty())) {
+        whole.erase(0, whole.find_first_not_of('0'));
+        if (whole.size() > 10 || (!whole.empty() && std::stoll(whole) > kMaxSeconds)) {
+            throw ConfigError(where + " must be at most " + std::to_string(kMaxSeconds) + " seconds");
+        }
+        int64_t ns = (whole.empty() ? 0 : std::stoll(whole)) * 1000000000 + std::stoll((fraction + "000000000").substr(0, 9));
+        if (fraction.size() > 9 && fraction[9] >= '5') {
+            ++ns;
+        }
+        return AlicaTime::nanoseconds(ns);
+    }
+    double d = 0;
+    if (!decodeFiniteDouble(node, d) || d > kMaxSeconds || d < -kMaxSeconds) {
+        throw ConfigError(where + " must be finite and at most " + std::to_string(kMaxSeconds) + " seconds");
+    }
+    return AlicaTime::nanoseconds(std::llround(d * 1e9));
 }
 
-} // namespace
+std::string formatSeconds(AlicaTime t)
+{
+    const int64_t ns = t.inNanoseconds();
+    const uint64_t magnitude = ns < 0 ? 0 - static_cast<uint64_t>(ns) : static_cast<uint64_t>(ns);
+    std::string fraction = std::to_string(magnitude % 1000000000);
+    fraction.insert(0, 9 - fraction.size(), '0');
+    fraction.erase(fraction.find_last_not_of('0') + 1);
+    return (ns < 0 ? "-" : "") + std::to_string(magnitude / 1000000000) + (fraction.empty() ? "" : "." + fraction);
+}
 
 MatchConfig loadMatchConfig(const std::string& path)
 {
@@ -203,13 +241,14 @@ MatchConfig parseMatchConfig(const YAML::Node& root, const std::string& baseDirS
     config.worldParams = optionalMap(world, "params", "world");
 
     config.seed = optionalAs<uint64_t>(root, "seed", "match config", 0);
-    double dt = optionalAs<double>(root, "dt", "match config", 0.01);
-    double duration = requiredAs<double>(root, "duration", "match config");
-    if (!(dt > 0) || !(duration > 0)) {
-        throw ConfigError("match config: 'dt' and 'duration' must be positive");
+    config.dt = root["dt"] && !root["dt"].IsNull() ? parseSeconds(root["dt"], "dt") : AlicaTime::milliseconds(10);
+    config.duration = parseSeconds(required(root, "duration", "match config"), "duration");
+    if (config.dt < AlicaTime::nanoseconds(1)) {
+        throw ConfigError("match config: 'dt' must be at least 1 ns");
     }
-    config.dt = seconds(dt);
-    config.duration = seconds(duration);
+    if (config.duration < config.dt) {
+        throw ConfigError("match config: 'duration' must be at least 'dt'");
+    }
     config.recordEvery = optionalAs<int>(root, "recordEvery", "match config", 1);
     if (config.recordEvery < 1) {
         throw ConfigError("match config: 'recordEvery' must be at least 1");
@@ -265,8 +304,8 @@ void writeMatchConfigFields(JsonWriter& w, const MatchConfig& config)
     w.field("params", config.worldParams);
     w.endObject();
     w.field("seed", config.seed);
-    w.field("dt", inSeconds(config.dt));
-    w.field("duration", inSeconds(config.duration));
+    w.key("dt").number(formatSeconds(config.dt));
+    w.key("duration").number(formatSeconds(config.duration));
     w.field("recordEvery", config.recordEvery);
     w.key("engine").beginObject();
     for (const auto& [path, value] : config.engine) {

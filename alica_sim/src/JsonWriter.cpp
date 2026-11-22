@@ -83,6 +83,13 @@ JsonWriter& JsonWriter::value(std::string_view v)
     return *this;
 }
 
+JsonWriter& JsonWriter::number(std::string_view literal)
+{
+    separate();
+    _out += literal;
+    return *this;
+}
+
 JsonWriter& JsonWriter::null()
 {
     separate();

@@ -102,7 +102,7 @@ if(BUILD_TESTING)
   add_dependencies(${PROJECT_NAME}-test alica_sim_test_world alica_sim_test_team alica_sim_run)
   gtest_discover_tests(${PROJECT_NAME}-test)
 
-  add_executable(${PROJECT_NAME}-fast-math-test test/test_fast_math.cpp src/JsonWriter.cpp src/Numeric.cpp)
+  add_executable(${PROJECT_NAME}-fast-math-test test/test_fast_math.cpp src/JsonWriter.cpp src/MatchConfig.cpp src/Numeric.cpp)
   target_include_directories(${PROJECT_NAME}-fast-math-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_compile_options(${PROJECT_NAME}-fast-math-test PRIVATE -O2 -ffast-math)
   target_link_libraries(${PROJECT_NAME}-fast-math-test PRIVATE alica_engine ${YAML_CPP_LIBRARIES} GTest::gtest GTest::gtest_main Threads::Threads)

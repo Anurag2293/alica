@@ -104,5 +104,49 @@ TEST(MatchConfigTest, RejectsBadPlayers)
     EXPECT_THROW(parseMatchConfig(YAML::Load("{world: {plugin: w}, teams: []}"), "/"), ConfigError);
 }
 
+MatchConfig timedConfig(const std::string& dt, const std::string& duration)
+{
+    return parseMatchConfig(YAML::Load("{world: {plugin: w}, dt: " + dt + ", duration: " + duration +
+                                       ", teams: [{name: T, plans: p, masterPlan: M, players: [{name: a, id: 1}]}]}"),
+            "/");
+}
+
+TEST(MatchConfigTest, TimesAreExactNanoseconds)
+{
+    EXPECT_EQ(timedConfig("0.016666666", "1").dt, AlicaTime::nanoseconds(16666666));
+    EXPECT_EQ(timedConfig("0.0166666665", "1").dt, AlicaTime::nanoseconds(16666667));
+    EXPECT_EQ(timedConfig("1e-3", "1").dt, AlicaTime::milliseconds(1));
+    EXPECT_EQ(timedConfig("0.000000001", "3600").duration, AlicaTime::seconds(3600));
+    EXPECT_EQ(timedConfig("0.01", "4000000000").duration, AlicaTime::seconds(4000000000));
+    EXPECT_EQ(formatSeconds(AlicaTime::nanoseconds(16666666)), "0.016666666");
+    EXPECT_EQ(formatSeconds(AlicaTime::milliseconds(1500)), "1.5");
+    EXPECT_EQ(formatSeconds(AlicaTime::seconds(2)), "2");
+    EXPECT_EQ(formatSeconds(AlicaTime::zero()), "0");
+}
+
+TEST(MatchConfigTest, RejectsTimesThatDoNotGiveAtLeastOneTick)
+{
+    for (const auto& [dt, duration] : std::vector<std::pair<std::string, std::string>>{{"1e-10", "1"}, {"0", "1"}, {"-0.01", "1"}, {".inf", "1"},
+                 {".nan", "1"}, {"abc", "1"}, {"[1]", "1"}, {"0.01", "0.001"}, {"0.01", "1e300"}, {"0.01", "99999999999"}, {"0.01", "-.inf"}}) {
+        EXPECT_THROW(timedConfig(dt, duration), ConfigError) << dt << " " << duration;
+    }
+}
+
+TEST(MatchConfigTest, TheReplayHeaderReproducesTheTimes)
+{
+    for (int64_t ns : {1LL, 16666666LL, 33333333LL, 999999999LL, 1000000001LL, 123456789012345LL}) {
+        MatchConfig config = timedConfig("0.01", "1");
+        config.dt = AlicaTime::nanoseconds(ns);
+        config.duration = AlicaTime::nanoseconds(ns * 3);
+        JsonWriter w;
+        w.beginObject();
+        writeMatchConfigFields(w, config);
+        w.endObject();
+        const YAML::Node header = YAML::Load(w.str());
+        EXPECT_EQ(parseSeconds(header["dt"], "dt"), config.dt) << w.str();
+        EXPECT_EQ(parseSeconds(header["duration"], "duration"), config.duration) << w.str();
+    }
+}
+
 } // namespace
 } // namespace alica::sim

@@ -26,11 +26,6 @@ namespace
 
 namespace fs = std::filesystem;
 
-double inSeconds(AlicaTime t)
-{
-    return static_cast<double>(t.inNanoseconds()) / 1e9;
-}
-
 void rejectEngineConfig(const TeamConfig& team)
 {
     for (const std::string& folder : team.plans) {
@@ -304,7 +299,7 @@ void Match::recordFrame()
 {
     _writer.clear();
     _writer.beginObject();
-    _writer.field("t", inSeconds(_time.now()));
+    _writer.key("t").number(formatSeconds(_time.now()));
     _writer.field("tick", _tick);
     _world->writeFrame(_writer);
     _writer.endObject();

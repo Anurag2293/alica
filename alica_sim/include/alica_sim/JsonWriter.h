@@ -32,6 +32,7 @@ public:
     JsonWriter& value(const char* v) { return value(std::string_view(v)); }
     JsonWriter& value(const std::string& v) { return value(std::string_view(v)); }
     JsonWriter& value(const YAML::Node& node);
+    JsonWriter& number(std::string_view literal);
     JsonWriter& null();
 
     template <class T>

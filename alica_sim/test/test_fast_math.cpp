@@ -1,4 +1,5 @@
 #include <alica_sim/JsonWriter.h>
+#include <alica_sim/MatchConfig.h>
 #include <alica_sim/Numeric.h>
 
 #include <gtest/gtest.h>
@@ -34,6 +35,13 @@ TEST(FastMathTest, NonFiniteYamlScalarsStayStrings)
     JsonWriter w;
     w.value(YAML::Load("[.inf, -.inf, .nan, 1.5]"));
     EXPECT_EQ(w.str(), R"([".inf","-.inf",".nan",1.5])");
+}
+
+TEST(FastMathTest, NonFiniteTimesAreConfigErrors)
+{
+    EXPECT_THROW(parseSeconds(YAML::Load(".inf"), "dt"), ConfigError);
+    EXPECT_THROW(parseSeconds(YAML::Load(".nan"), "dt"), ConfigError);
+    EXPECT_THROW(parseSeconds(YAML::Load("-.inf"), "dt"), ConfigError);
 }
 
 } // namespace
