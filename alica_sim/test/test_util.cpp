@@ -126,8 +126,8 @@ TEST(MatchConfigTest, TimesAreExactNanoseconds)
 
 TEST(MatchConfigTest, RejectsTimesThatDoNotGiveAtLeastOneTick)
 {
-    for (const auto& [dt, duration] : std::vector<std::pair<std::string, std::string>>{{"1e-10", "1"}, {"0", "1"}, {"-0.01", "1"}, {".inf", "1"},
-                 {".nan", "1"}, {"abc", "1"}, {"[1]", "1"}, {"0.01", "0.001"}, {"0.01", "1e300"}, {"0.01", "99999999999"}, {"0.01", "-.inf"}}) {
+    for (const auto& [dt, duration] : std::vector<std::pair<std::string, std::string>>{{"1e-10", "1"}, {"0", "1"}, {"-0.01", "1"}, {".inf", "1"}, {".nan", "1"},
+                 {"abc", "1"}, {"[1]", "1"}, {"0.01", "0.001"}, {"0.01", "1e300"}, {"0.01", "99999999999"}, {"0.01", "-.inf"}}) {
         EXPECT_THROW(timedConfig(dt, duration), ConfigError) << dt << " " << duration;
     }
 }

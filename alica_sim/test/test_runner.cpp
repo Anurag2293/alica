@@ -28,16 +28,16 @@ protected:
     {
         const fs::path file = dir / "match.yaml";
         std::ofstream(file) << "{world: {plugin: alica_sim_test_world}, dt: 0.01, duration: 0.1, teams: [{name: T, plans: " << ALICA_SIM_TEST_DIR
-                            << "/team/plans, libraries: [" << ALICA_SIM_TEST_TEAM_DIR << "], masterPlan: TestMaster, players: [{name: p, id: 1, local: {DefaultRole: "
-                            << role << "}}]}]}\n";
+                            << "/team/plans, libraries: [" << ALICA_SIM_TEST_TEAM_DIR
+                            << "], masterPlan: TestMaster, players: [{name: p, id: 1, local: {DefaultRole: " << role << "}}]}]}\n";
         return file.string();
     }
 
     int run(const std::string& args, const std::string& shellPrefix = "")
     {
         std::ostringstream command;
-        command << shellPrefix << "'" << ALICA_SIM_RUN << "' " << args << " --plugin-path '" << ALICA_SIM_TEST_WORLD_DIR << "' >'" << (dir / "stdout").string() << "' 2>'"
-                << (dir / "stderr").string() << "'";
+        command << shellPrefix << "'" << ALICA_SIM_RUN << "' " << args << " --plugin-path '" << ALICA_SIM_TEST_WORLD_DIR << "' >'" << (dir / "stdout").string()
+                << "' 2>'" << (dir / "stderr").string() << "'";
         const int status = std::system(command.str().c_str());
         return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
     }
