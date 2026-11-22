@@ -1,4 +1,5 @@
 #include "alica_sim/Match.h"
+#include "alica_sim/PlanFiles.h"
 #include "alica_sim/Sha256.h"
 
 #include <unistd.h>
@@ -36,9 +37,9 @@ void rejectEngineConfig(const TeamConfig& team)
         if (!fs::is_directory(folder)) {
             throw ConfigError("team " + team.name + ": plan folder " + folder + " does not exist");
         }
-        for (const auto& entry : fs::recursive_directory_iterator(folder)) {
-            if (entry.is_regular_file() && entry.path().filename() == "Alica.yaml") {
-                throw ConfigError("team " + team.name + ": " + entry.path().string() + " is not allowed, engine options belong in the match config");
+        for (const PlanFile& file : listFiles({folder})) {
+            if (fs::path(file.relative).filename() == "Alica.yaml") {
+                throw ConfigError("team " + team.name + ": " + file.path + " is not allowed, engine options belong in the match config");
             }
         }
     }
@@ -195,28 +196,20 @@ Agent& Match::agent(const std::string& name)
     throw std::out_of_range("no agent " + name);
 }
 
-bool Match::isPlanFile(const std::filesystem::path& path)
-{
-    static const std::set<std::string> extensions{".pml", ".beh", ".pty", ".plh", ".tsk", ".cnd", ".rst"};
-    return extensions.count(path.extension().string()) > 0;
-}
-
 std::string Match::planHash(const std::vector<std::string>& planFolders)
 {
-    std::vector<std::pair<std::string, fs::path>> files;
-    for (const std::string& folder : planFolders) {
-        for (const auto& entry : fs::recursive_directory_iterator(folder)) {
-            if (entry.is_regular_file() && isPlanFile(entry.path())) {
-                files.emplace_back(fs::relative(entry.path(), folder).generic_string(), entry.path());
-            }
+    std::vector<PlanFile> files;
+    for (const PlanFile& file : listFiles(planFolders)) {
+        if (isPlanFile(file.relative)) {
+            files.push_back(file);
         }
     }
-    std::stable_sort(files.begin(), files.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::stable_sort(files.begin(), files.end(), [](const PlanFile& a, const PlanFile& b) { return a.relative < b.relative; });
     Sha256 sha;
-    for (const auto& [relative, path] : files) {
-        std::ifstream in(path, std::ios::binary);
+    for (const PlanFile& file : files) {
+        std::ifstream in(file.path, std::ios::binary);
         std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        sha.update(relative + "\n" + std::to_string(content.size()) + "\n");
+        sha.update(file.relative + "\n" + std::to_string(content.size()) + "\n");
         sha.update(content);
     }
     return sha.hexDigest();

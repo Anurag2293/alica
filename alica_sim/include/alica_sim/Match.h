@@ -8,7 +8,6 @@
 #include "alica_sim/SimClock.h"
 #include "alica_sim/World.h"
 
-#include <filesystem>
 #include <functional>
 #include <memory>
 #include <ostream>
@@ -48,7 +47,6 @@ public:
     World& world() { return *_world; }
     Agent& agent(const std::string& name);
 
-    static bool isPlanFile(const std::filesystem::path& path);
     static std::string planHash(const std::vector<std::string>& planFolders);
 
 private:

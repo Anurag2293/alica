@@ -36,6 +36,7 @@ add_library(${PROJECT_NAME} SHARED
   src/Match.cpp
   src/MatchConfig.cpp
   src/MessageBus.cpp
+  src/PlanFiles.cpp
   src/Runner.cpp
   src/Scheduler.cpp
   src/Sha256.cpp
@@ -83,6 +84,7 @@ if(BUILD_TESTING)
   add_executable(${PROJECT_NAME}-test
     test/test_match.cpp
     test/test_message_bus.cpp
+    test/test_plan_files.cpp
     test/test_scheduler.cpp
     test/test_util.cpp
   )

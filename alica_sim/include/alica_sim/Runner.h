@@ -33,6 +33,7 @@ private:
 
     std::vector<std::string> _libraries;
     std::vector<std::string> _plans;
+    std::string _masterPlan;
 };
 
 void runMatch(Match& match, double speed);
