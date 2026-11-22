@@ -1,9 +1,13 @@
 #include <alica_sim/Match.h>
 #include <alica_sim/PlanFiles.h>
 
+#include <engine/FileSystem.h>
+
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <clocale>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -97,6 +101,36 @@ TEST_F(PlanFilesTest, FindsTheNamedOrTheDefaultRoleSet)
     EXPECT_EQ(roleNames((root / "RoleSet.rst").string()), (std::set<std::string>{"Player"}));
     fs::remove(root / "RoleSet.rst");
     EXPECT_EQ(findRoleSetFile({root.string()}, "RoleSet"), "");
+}
+
+TEST_F(PlanFilesTest, PicksTheSameFileAsTheEngineUnderTheLocaleCollation)
+{
+    const std::string previous = std::setlocale(LC_COLLATE, nullptr);
+    std::string chosen;
+    for (const char* locale : {"en_US.UTF-8", "en_US.utf8", "de_DE.UTF-8", "de_DE.utf8", "C.UTF-8", "C.utf8"}) {
+        if (std::setlocale(LC_COLLATE, locale) && std::strcoll("a", "B") < 0) {
+            chosen = locale;
+            break;
+        }
+    }
+    if (chosen.empty()) {
+        std::setlocale(LC_COLLATE, previous.c_str());
+        GTEST_SKIP() << "no locale that collates a before B";
+    }
+    for (const char* sub : {"B", "a"}) {
+        fs::create_directories(root / sub);
+        fs::copy(plans / "Walk.beh", root / sub / "Walk.beh");
+    }
+    std::string engineFound;
+    const bool engineHit = essentials::FileSystem::findFile(root.string(), "Walk.beh", engineFound);
+    const std::string walkFound = findPlanFile({root.string()}, "Walk.beh");
+    const std::vector<std::string> files = relatives(root.string());
+    std::setlocale(LC_COLLATE, previous.c_str());
+
+    ASSERT_TRUE(engineHit);
+    EXPECT_EQ(walkFound, engineFound) << chosen;
+    EXPECT_EQ(walkFound, (root / "a/Walk.beh").string()) << chosen;
+    EXPECT_EQ(files, (std::vector<std::string>{"a/Walk.beh", "B/Walk.beh"})) << chosen;
 }
 
 } // namespace

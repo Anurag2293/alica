@@ -6,6 +6,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <deque>
 #include <functional>
 #include <map>
@@ -23,18 +24,16 @@ using DirId = std::pair<dev_t, ino_t>;
 std::vector<std::string> sortedNames(const std::string& dir)
 {
     std::vector<std::string> names;
-    DIR* d = opendir(dir.c_str());
-    if (!d) {
-        return names;
-    }
-    while (const dirent* entry = readdir(d)) {
-        std::string name = entry->d_name;
+    dirent** list = nullptr;
+    const int n = scandir(dir.c_str(), &list, nullptr, alphasort);
+    for (int i = 0; i < n; ++i) {
+        std::string name = list[i]->d_name;
         if (name != "." && name != "..") {
             names.push_back(std::move(name));
         }
+        free(list[i]);
     }
-    closedir(d);
-    std::sort(names.begin(), names.end());
+    free(list);
     return names;
 }
 

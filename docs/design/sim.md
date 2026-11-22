@@ -189,9 +189,10 @@ team's folders:
   `0 < MinBroadcastFrequency <= MaxBroadcastFrequency <= EngineFrequency`, the status message
   frequency does not exceed the engine frequency and `UseStaticRoles` is true.
 - An `Alica.yaml` in a team's plan folders is a config error.
-- Plan folders are searched like the engine's `FileSystem::findFile`: depth first in name order,
-  following symlinked directories. A symlink cycle (a directory inside itself) is a config error,
-  because the engine's search has no visited set and would recurse until it crashes.
+- Plan folders are searched like the engine's `FileSystem::findFile`: depth first, entries in
+  `scandir`/`alphasort` order (the process locale's collation), following symlinked
+  directories. A symlink cycle (a directory inside itself) is a config error, because the
+  engine's search has no visited set and would recurse until it crashes.
 - Engine settings are match-wide. Some are process-wide statics in the engine
   (`Alica.AllowIdling`, `Alica.AssignmentProtectionTime`), so per-team values would silently
   leak between teams; only `local` differs per player.
@@ -346,9 +347,10 @@ at least 1 ns, `duration` at least `dt`, both at most 4e9 s; infinity and NaN ar
 - The runner runs a two-team match end to end and prints the result line.
 - Config errors (unknown role, missing master plan, plan tree file or role set, invalid engine
   options) are reported before any engine starts; the runner exits 1 instead of aborting.
-- Plan folders: symlinked directories are followed, a symlink cycle is a config error (the
-  runner exits 1 even when the link sorts before the master plan), and an unused plan with an
-  unknown library does not stop a match.
+- Plan folders: the walk picks the same file as the engine under a non-C collation locale,
+  symlinked directories are followed, a symlink cycle is a config error (the runner exits 1 even
+  when the link sorts before the master plan), and an unused plan with an unknown library does
+  not stop a match.
 - Times: dt and duration are exact nanoseconds and survive a round trip through the header.
 - Non-finite numbers are detected by a test compiled with `-O2 -ffast-math`.
 - The creators live until the engine is destroyed; an agent that stops itself from a behaviour
