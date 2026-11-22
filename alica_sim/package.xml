@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>alica_sim</name>
+  <version>0.1.0</version>
+  <description>Deterministic match kernel: teams of ALICA agents against a world plugin on a simulated clock</description>
+
+  <maintainer email="anuragdhote392@gmail.com">Anurag Dhote</maintainer>
+
+  <license>MIT</license>
+
+  <depend>alica_engine</depend>
+  <depend>alica_dynamic_loading</depend>
+  <depend>yaml-cpp</depend>
+  <depend>boost</depend>
+  <test_depend>gtest</test_depend>
+
+  <buildtool_depend>cmake</buildtool_depend>
+
+  <export>
+    <build_type>cmake</build_type>
+  </export>
+</package>

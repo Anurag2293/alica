@@ -1,0 +1,291 @@
+#include "alica_sim/Match.h"
+#include "alica_sim/Sha256.h"
+
+#include <unistd.h>
+
+#include <algorithm>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <set>
+#include <stdexcept>
+
+#ifndef ALICA_SIM_VERSION
+#define ALICA_SIM_VERSION "unknown"
+#endif
+#ifndef ALICA_SIM_BUILD_ID
+#define ALICA_SIM_BUILD_ID "unknown"
+#endif
+
+namespace alica::sim
+{
+
+namespace
+{
+
+namespace fs = std::filesystem;
+
+double inSeconds(AlicaTime t)
+{
+    return static_cast<double>(t.inNanoseconds()) / 1e9;
+}
+
+void rejectEngineConfig(const TeamConfig& team)
+{
+    for (const std::string& folder : team.plans) {
+        if (!fs::is_directory(folder)) {
+            throw ConfigError("team " + team.name + ": plan folder " + folder + " does not exist");
+        }
+        for (const auto& entry : fs::recursive_directory_iterator(folder)) {
+            if (entry.is_regular_file() && entry.path().filename() == "Alica.yaml") {
+                throw ConfigError("team " + team.name + ": " + entry.path().string() + " is not allowed, engine options belong in the match config");
+            }
+        }
+    }
+}
+
+std::string makeTempDir()
+{
+    std::string pattern = (fs::temp_directory_path() / "alica_sim.XXXXXX").string();
+    if (!mkdtemp(pattern.data())) {
+        throw std::runtime_error("cannot create a temporary folder");
+    }
+    return pattern;
+}
+
+void writeFile(const fs::path& path, const std::string& content)
+{
+    fs::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::binary);
+    out << content;
+    if (!out) {
+        throw std::runtime_error("cannot write " + path.string());
+    }
+}
+
+void writeLibrary(JsonWriter& w, const std::string& key, const std::string& path)
+{
+    w.key(key).beginObject();
+    w.field("path", path);
+    w.field("sha256", Sha256::fileHex(path));
+    w.endObject();
+}
+
+} // namespace
+
+Match::Match(MatchConfig config, std::unique_ptr<World> world, TeamFactoryMaker makeTeamFactory, MatchOptions options)
+        : _config(std::move(config))
+        , _options(std::move(options))
+        , _world(std::move(world))
+        , _makeTeamFactory(std::move(makeTeamFactory))
+{
+    if (!_world) {
+        throw std::invalid_argument("Match: no world");
+    }
+}
+
+Match::~Match()
+{
+    _agents.clear();
+    if (_ownsWorkDir) {
+        std::error_code ec;
+        fs::remove_all(_workDir, ec);
+    }
+}
+
+void Match::start()
+{
+    if (_started) {
+        return;
+    }
+    _started = true;
+    for (const TeamConfig& team : _config.teams) {
+        rejectEngineConfig(team);
+    }
+    if (_options.workDir.empty()) {
+        _workDir = makeTempDir();
+        _ownsWorkDir = true;
+    } else {
+        _workDir = fs::absolute(_options.workDir).string();
+        fs::create_directories(_workDir);
+    }
+
+    _world->configure(_config.worldParams, _config.seed);
+
+    int owner = 0;
+    for (size_t teamIndex = 0; teamIndex < _config.teams.size(); ++teamIndex) {
+        const TeamConfig& team = _config.teams[teamIndex];
+        _buses.push_back(std::make_unique<MessageBus>());
+        _factories.push_back(_makeTeamFactory(team));
+        for (size_t playerIndex = 0; playerIndex < team.players.size(); ++playerIndex) {
+            const PlayerConfig& player = team.players[playerIndex];
+            YAML::Node engine = engineConfig(_config, player);
+            if (!engine["Local"]["DefaultRole"]) {
+                throw ConfigError("team " + team.name + " player " + player.name + ": 'local.DefaultRole' is missing");
+            }
+            YAML::Emitter emitter;
+            emitter << engine;
+            const fs::path configRoot = fs::path(_workDir) / std::to_string(owner);
+            writeFile(configRoot / player.name / "Alica.yaml", std::string(emitter.c_str()) + "\n");
+            _effectiveConfigs.emplace_back(player.name, engine);
+
+            AgentSpec spec{team.name, static_cast<int>(teamIndex), player.name, player.id, static_cast<int>(playerIndex), player.params};
+            std::any io = _world->addAgent(spec);
+            _agents.push_back(std::make_unique<Agent>(spec, team, configRoot.string(), _time, _scheduler, owner++, *_buses.back(), std::move(io)));
+            _agents.back()->start(_factories.back()->creators());
+        }
+    }
+
+    writeHeader();
+    recordFrame();
+}
+
+void Match::tick()
+{
+    const AlicaTime t = _config.dt * _tick;
+    _time.set(t);
+    for (auto& bus : _buses) {
+        bus->deliver();
+    }
+    _world->sense(t);
+    _scheduler.runUntil(t + _config.dt);
+    _world->step(t, _config.dt);
+    ++_tick;
+    _time.set(_config.dt * _tick);
+    if (_tick % _config.recordEvery == 0) {
+        recordFrame();
+    }
+}
+
+bool Match::finished() const
+{
+    return _world->finished() || _time.now() >= _config.duration;
+}
+
+void Match::stop()
+{
+    if (!_started || _stopped) {
+        return;
+    }
+    _stopped = true;
+    for (auto& agent : _agents) {
+        agent->stop();
+    }
+    _writer.clear();
+    _writer.beginObject();
+    _writer.key("result").beginObject();
+    _world->writeResult(_writer);
+    _writer.endObject();
+    _writer.field("ticks", _tick);
+    _writer.endObject();
+    _resultLine = _writer.str();
+    writeLine();
+    if (_options.replay) {
+        _options.replay->flush();
+    }
+}
+
+Agent& Match::agent(const std::string& name)
+{
+    for (auto& agent : _agents) {
+        if (agent->name() == name) {
+            return *agent;
+        }
+    }
+    throw std::out_of_range("no agent " + name);
+}
+
+bool Match::isPlanFile(const std::filesystem::path& path)
+{
+    static const std::set<std::string> extensions{".pml", ".beh", ".pty", ".plh", ".tsk", ".cnd", ".rst"};
+    return extensions.count(path.extension().string()) > 0;
+}
+
+std::string Match::planHash(const std::vector<std::string>& planFolders)
+{
+    std::vector<std::pair<std::string, fs::path>> files;
+    for (const std::string& folder : planFolders) {
+        for (const auto& entry : fs::recursive_directory_iterator(folder)) {
+            if (entry.is_regular_file() && isPlanFile(entry.path())) {
+                files.emplace_back(fs::relative(entry.path(), folder).generic_string(), entry.path());
+            }
+        }
+    }
+    std::stable_sort(files.begin(), files.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    Sha256 sha;
+    for (const auto& [relative, path] : files) {
+        std::ifstream in(path, std::ios::binary);
+        std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        sha.update(relative + "\n" + std::to_string(content.size()) + "\n");
+        sha.update(content);
+    }
+    return sha.hexDigest();
+}
+
+void Match::writeHeader()
+{
+    JsonWriter& w = _writer;
+    w.clear();
+    w.beginObject();
+    w.field("format", "alica-sim-replay");
+    w.field("version", 1);
+
+    w.key("match").beginObject();
+    writeMatchConfigFields(w, _config);
+    w.key("effectiveConfig").beginObject();
+    for (const auto& [name, engine] : _effectiveConfigs) {
+        w.field(name, engine);
+    }
+    w.endObject();
+    w.endObject();
+
+    w.key("provenance").beginObject();
+    w.key("alicaSim").beginObject();
+    w.field("version", ALICA_SIM_VERSION);
+    w.field("build", ALICA_SIM_BUILD_ID);
+    w.endObject();
+    if (!_options.worldLibrary.empty()) {
+        writeLibrary(w, "world", _options.worldLibrary);
+    }
+    w.key("teams").beginObject();
+    for (size_t i = 0; i < _config.teams.size(); ++i) {
+        w.key(_config.teams[i].name).beginObject();
+        w.field("plans", planHash(_config.teams[i].plans));
+        w.key("libraries").beginObject();
+        for (const auto& [name, path] : _factories[i]->libraries()) {
+            writeLibrary(w, name, path);
+        }
+        w.endObject();
+        w.endObject();
+    }
+    w.endObject();
+    w.endObject();
+
+    w.key("world").beginObject();
+    w.field("name", _world->name());
+    w.field("rulesVersion", _world->rulesVersion());
+    _world->writeHeader(w);
+    w.endObject();
+    w.endObject();
+    writeLine();
+}
+
+void Match::recordFrame()
+{
+    _writer.clear();
+    _writer.beginObject();
+    _writer.field("t", inSeconds(_time.now()));
+    _writer.field("tick", _tick);
+    _world->writeFrame(_writer);
+    _writer.endObject();
+    writeLine();
+}
+
+void Match::writeLine()
+{
+    if (_options.replay) {
+        *_options.replay << _writer.str() << '\n';
+    }
+}
+
+} // namespace alica::sim

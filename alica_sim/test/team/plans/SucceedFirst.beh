@@ -1,0 +1,17 @@
+{
+  "blackboard": [],
+  "comment": "",
+  "deferring": 0,
+  "eventDriven": false,
+  "frequency": 30,
+  "id": 2002112507878850417,
+  "implementationName": "SucceedFirst",
+  "inheritBlackboard": false,
+  "isInterface": false,
+  "libraryName": "alica_sim_test_team",
+  "name": "SucceedFirst",
+  "postCondition": null,
+  "preCondition": null,
+  "runtimeCondition": null,
+  "variables": []
+}
