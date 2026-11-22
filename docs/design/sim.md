@@ -325,8 +325,11 @@ at least 1 ns, `duration` at least `dt`, both at most 4e9 s; infinity and NaN ar
 - The world plugin `lib<plugin>.so` (`.dylib` on macOS) is looked up in the `--plugin-path`
   folders, by default the config file's folder.
 - Prints the result line to stdout and exits 0 when the match completes; exits 1 on a config,
-  load, engine or replay write error and 2 on a usage error. Engine logs go to stderr, so stdout holds only the
-  result line.
+  load, engine or replay write error and 2 on a usage error. Engine logs go to stderr, so stdout
+  holds only the result line.
+- The runner validates names, files, roles and engine options and expects plans that pass
+  `alicaplan check`; a structurally broken compiled plan (for example a duplicate element id or
+  a broken entry point) can still abort the engine, and the runner then exits non-zero.
 
 ## Tests
 
