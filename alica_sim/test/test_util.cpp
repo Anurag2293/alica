@@ -5,6 +5,8 @@
 #include <gtest/gtest.h>
 #include <yaml-cpp/yaml.h>
 
+#include <clocale>
+#include <cstdio>
 #include <string>
 
 namespace alica::sim
@@ -47,6 +49,34 @@ TEST(JsonWriterTest, DoublesHaveAFixedFormat)
     EXPECT_EQ(JsonWriter::formatDouble(1e-7), "0");
     EXPECT_EQ(JsonWriter::formatDouble(123456.1234567), "123456.123457");
     EXPECT_EQ(JsonWriter::formatDouble(1.0 / 0.0), "null");
+}
+
+TEST(JsonWriterTest, DoublesIgnoreTheLocale)
+{
+    const std::string previous = std::setlocale(LC_NUMERIC, nullptr);
+    std::string chosen;
+    for (const char* locale : {"de_DE.UTF-8", "de_DE.utf8", "de_DE", "fr_FR.UTF-8", "fr_FR.utf8", "nl_NL.UTF-8"}) {
+        char probe[16];
+        if (std::setlocale(LC_NUMERIC, locale) && std::snprintf(probe, sizeof(probe), "%.1f", 1.5) > 0 && std::string(probe) == "1,5") {
+            chosen = locale;
+            break;
+        }
+    }
+    if (chosen.empty()) {
+        std::setlocale(LC_NUMERIC, previous.c_str());
+        GTEST_SKIP() << "no comma-decimal locale";
+    }
+    const std::string half = JsonWriter::formatDouble(1.5);
+    const std::string precise = JsonWriter::formatDouble(123456.1234567);
+    const std::string negative = JsonWriter::formatDouble(-2.25);
+    JsonWriter w;
+    w.beginObject().field("x", 0.1 + 0.2).field("y", YAML::Load("2.5")).endObject();
+    std::setlocale(LC_NUMERIC, previous.c_str());
+
+    EXPECT_EQ(half, "1.5") << chosen;
+    EXPECT_EQ(precise, "123456.123457") << chosen;
+    EXPECT_EQ(negative, "-2.25") << chosen;
+    EXPECT_EQ(w.str(), R"({"x":0.3,"y":2.5})") << chosen;
 }
 
 TEST(JsonWriterTest, WritesYamlWithScalarTypes)

@@ -13,7 +13,7 @@ class Node;
 namespace alica::sim
 {
 
-// Doubles are written with at most 6 decimals and no trailing zeros, so output is byte-stable.
+// Doubles are written with at most 6 decimals, no trailing zeros and a '.' in any locale, so output is byte-stable.
 class JsonWriter
 {
 public:

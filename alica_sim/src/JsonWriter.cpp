@@ -1,7 +1,11 @@
 #include "alica_sim/JsonWriter.h"
 #include "alica_sim/Numeric.h"
 
+#include <locale.h>
 #include <yaml-cpp/yaml.h>
+#ifdef __APPLE__
+#include <xlocale.h>
+#endif
 
 #include <cstdio>
 #include <stdexcept>
@@ -150,8 +154,11 @@ std::string JsonWriter::formatDouble(double v)
     if (!isFinite(v)) {
         return "null";
     }
+    static const locale_t cNumeric = newlocale(LC_NUMERIC_MASK, "C", static_cast<locale_t>(0));
     char buf[512];
+    const locale_t previous = uselocale(cNumeric);
     std::snprintf(buf, sizeof(buf), "%.6f", v);
+    uselocale(previous);
     std::string s(buf);
     size_t dot = s.find('.');
     if (dot != std::string::npos) {

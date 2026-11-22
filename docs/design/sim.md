@@ -279,6 +279,7 @@ by path) and of every library the match loaded (the world plugin and each behavi
 and utility library), keyed by team and library name, with the resolved path. Each agent's
 generated `Alica.yaml` is included under `match` as `effectiveConfig`, keyed by player name.
 `match.engine` holds the match's `engine` section as written, flattened to dotted keys.
+Doubles are written with at most six decimals and a `.` whatever the process locale.
 `dt`, `duration` and the frames' `t` are exact decimals of the integer nanoseconds (for example
 `0.016666666`), so the header parses back to the same ticks. A failed write or flush of the
 replay stops the match with an error.
