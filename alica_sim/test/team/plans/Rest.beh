@@ -1,0 +1,17 @@
+{
+  "blackboard": [],
+  "comment": "",
+  "deferring": 0,
+  "eventDriven": false,
+  "frequency": 30,
+  "id": 4828889529646951272,
+  "implementationName": "Rest",
+  "inheritBlackboard": false,
+  "isInterface": false,
+  "libraryName": "alica_sim_test_team",
+  "name": "Rest",
+  "postCondition": null,
+  "preCondition": null,
+  "runtimeCondition": null,
+  "variables": []
+}

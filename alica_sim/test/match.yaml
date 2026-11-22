@@ -1,0 +1,18 @@
+world:
+  plugin: alica_sim_test_world
+seed: 7
+dt: 0.01
+duration: 1.5
+recordEvery: 10
+teams:
+  - name: Blue
+    plans: team/plans
+    masterPlan: TestMaster
+    players:
+      - { name: blue1, id: 1, local: { DefaultRole: Player } }
+      - { name: blue2, id: 2, local: { DefaultRole: Player } }
+  - name: Red
+    plans: team/plans
+    masterPlan: TestMaster
+    players:
+      - { name: red1, id: 3, local: { DefaultRole: Player } }

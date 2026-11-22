@@ -1,0 +1,17 @@
+{
+  "blackboard": [],
+  "comment": "",
+  "deferring": 0,
+  "eventDriven": false,
+  "frequency": 30,
+  "id": 4423979581029728602,
+  "implementationName": "Walk",
+  "inheritBlackboard": false,
+  "isInterface": false,
+  "libraryName": "alica_sim_test_team",
+  "name": "Walk",
+  "postCondition": null,
+  "preCondition": null,
+  "runtimeCondition": null,
+  "variables": []
+}

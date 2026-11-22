@@ -1,0 +1,33 @@
+library: alica_sim_test_team
+
+task_repository:
+  tasks: [Play]
+
+condition_repository:
+  conditions:
+    ChildSucceeded: {}
+    OneSecondPassed: {}
+
+behaviours:
+  SucceedFirst: { frequency: 30, implementation: SucceedFirst }
+  Walk: { frequency: 30, implementation: Walk }
+  Rest: { frequency: 30, implementation: Rest }
+
+plans:
+  TestMaster:
+    master: true
+    implementation: SimTestPlan
+    entryPoints:
+      - { task: Play, state: Start }
+    states:
+      Start: [SucceedFirst]
+      Move: [Walk]
+      Done: [Rest]
+    transitions:
+      - Start -> Move: ChildSucceeded
+      - Move -> Done: OneSecondPassed
+
+roleset:
+  roles:
+    Player:
+      priorities: { Play: 0.5 }

@@ -16,6 +16,7 @@ PACKAGES=(
   alica_engine
   alica_dynamic_loading
   alica_standard_library
+  alica_sim
   alica_simple_solver
   alica_dummy_proxy
   alica_test_utility

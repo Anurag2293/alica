@@ -1,0 +1,23 @@
+{
+  "comment": "",
+  "conditions": [
+    {
+      "blackboard": [],
+      "comment": "",
+      "conditionRepository": 4027245597299025785,
+      "id": 546003087934931146,
+      "libraryName": "alica_sim_test_team",
+      "name": "ChildSucceeded"
+    },
+    {
+      "blackboard": [],
+      "comment": "",
+      "conditionRepository": 4027245597299025785,
+      "id": 1491996900913883048,
+      "libraryName": "alica_sim_test_team",
+      "name": "OneSecondPassed"
+    }
+  ],
+  "id": 4027245597299025785,
+  "name": "ConditionRepository"
+}
