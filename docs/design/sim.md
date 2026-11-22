@@ -74,7 +74,7 @@ public:
     using Callback = std::function<void()>;
     uint64_t add(Callback cb, AlicaTime period, int owner);   // first fire at the current event time
     void cancel(uint64_t id);                                 // safe from inside a callback
-    void advanceTo(AlicaTime t);   // fires every entry due at or before t, in order of
+    void runUntil(AlicaTime end);  // fires every entry due before end, in order of
                                    // (due time, owner, creation sequence); due += period
 };
 
@@ -87,9 +87,9 @@ public:
 };
 ```
 
-- An entry that is due several times within one `advanceTo` fires once per due time, in order.
+- An entry that is due several times within one `runUntil` fires once per due time, in order.
 - While a callback runs, `MatchTime` reads that entry's due time, so the engine sees exact
-  event times inside a tick. After the pass it reads `t`.
+  event times inside a tick.
 - A new timer first fires at the current event time: the due time of the callback that created
   it, or the match time outside a pass. This matches `AlicaSystemTimer`, which calls its callback
   before its first sleep, and keeps a timer created by an early event from being overtaken by
@@ -163,9 +163,10 @@ for both timer factories; `SimCommunication` on the team's bus; a logger. Creato
 team's `TeamFactory`. The agent's engine configuration is generated, never read from a
 team's folders:
 
-- The runner writes `<work>/<agent>/Alica.yaml` from the `alica_sim` defaults, the match's
+- Player names and ids are unique across the match; duplicates are a config error.
+- The runner writes `<work>/<team>/<agent>/Alica.yaml` from the `alica_sim` defaults, the match's
   `engine` section and the player's `local` section (for example `Local.DefaultRole`), always
-  with `Alica.SimulatedTime: true`, and puts `<work>` first on the agent's config paths, where
+  with `Alica.SimulatedTime: true`, and puts `<work>/<team>` first on the agent's config paths, where
   `AlicaContext::initConfig` looks for `<agent>/Alica.yaml` before anything else.
 - An `Alica.yaml` in a team's plan folders is a config error.
 - Engine settings are match-wide. Some are process-wide statics in the engine
@@ -198,11 +199,16 @@ public:
 
 `tick()`:
 
-1. `t += dt`; `clock.set(t)`.
-2. Every team bus: `deliver()`, in team order.
+A tick covers the half-open interval `[t, t + dt)`. Inputs become visible at its start and no
+callback runs before them, so nothing consumes an input earlier than its time:
+
+1. `matchTime.set(t)`.
+2. Every team bus: `deliver()`, in team order. Messages are stamped `t`.
 3. `world.sense(t)`.
-4. `scheduler.advanceTo(t)`: engine loops and behaviour runs, in scheduler order.
-5. `world.step(t, dt)`.
+4. `scheduler.runUntil(t + dt)`: engine loops and behaviour runs due in `[t, t + dt)`, each at
+   its own due time. Messages they send are delivered at the next tick's start, never earlier
+   than they were sent.
+5. `world.step(t, dt)`, then `t += dt`.
 6. Record a frame if `tick % recordEvery == 0`.
 
 Agents are created and started in config order: teams in order, players in order.
