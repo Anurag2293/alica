@@ -41,6 +41,7 @@ public:
 
 private:
     std::string _name;
+    AlicaCreators _creators;
     std::unique_ptr<AlicaContext> _context;
     bool _started = false;
 };

@@ -3,6 +3,7 @@
 #include <alica_sim/Match.h>
 #include <alica_sim/Runner.h>
 
+#include <engine/IUtilityCreator.h>
 #include <engine/blackboard/Blackboard.h>
 
 #include <gtest/gtest.h>
@@ -49,14 +50,16 @@ MatchConfig testConfig(int teams, int playersPerTeam, double duration, const std
     return parseMatchConfig(YAML::Load(yaml.str()), ALICA_SIM_TEST_DIR);
 }
 
-std::unique_ptr<Match> makeMatch(const MatchConfig& config, std::ostream* replay = nullptr)
+std::unique_ptr<Match> makeMatch(const MatchConfig& config, std::ostream* replay = nullptr, TeamFactoryMaker makeTeamFactory = nullptr)
 {
     LoadedWorld world = loadWorld(config.worldPlugin, {ALICA_SIM_TEST_WORLD_DIR});
     MatchOptions options;
     options.replay = replay;
     options.worldLibrary = world.file;
-    return std::make_unique<Match>(
-            config, std::move(world.world), [](const TeamConfig& team) { return std::make_unique<DynamicTeamFactory>(team); }, options);
+    if (!makeTeamFactory) {
+        makeTeamFactory = [](const TeamConfig& team) { return std::make_unique<DynamicTeamFactory>(team); };
+    }
+    return std::make_unique<Match>(config, std::move(world.world), std::move(makeTeamFactory), options);
 }
 
 TestIO& io(Match& match, const std::string& agent)
@@ -248,6 +251,49 @@ TEST(MatchTest, AnUnusedPlanWithAnUnknownLibraryDoesNotStopTheMatch)
     EXPECT_EQ(match->ticks(), 20);
     EXPECT_EQ(replay.str().find("retired_lib"), std::string::npos);
     fs::remove_all(dir);
+}
+
+int destroyedUtilityCreators = 0;
+
+class TrackedUtilityCreator : public IUtilityCreator
+{
+public:
+    explicit TrackedUtilityCreator(std::unique_ptr<IUtilityCreator> inner)
+            : _inner(std::move(inner))
+    {
+    }
+    ~TrackedUtilityCreator() override { ++destroyedUtilityCreators; }
+    std::shared_ptr<BasicUtilityFunction> createUtility(int64_t id, UtilityFunctionContext& context) override { return _inner->createUtility(id, context); }
+
+private:
+    std::unique_ptr<IUtilityCreator> _inner;
+};
+
+class TrackedTeamFactory : public DynamicTeamFactory
+{
+public:
+    using DynamicTeamFactory::DynamicTeamFactory;
+    AlicaCreators creators() override
+    {
+        AlicaCreators c = DynamicTeamFactory::creators();
+        return AlicaCreators(std::move(c.conditionCreator), std::make_unique<TrackedUtilityCreator>(std::move(c.utilityCreator)),
+                std::move(c.constraintCreator), std::move(c.behaviourCreator), std::move(c.planCreator), std::move(c.transitionConditionCreator));
+    }
+};
+
+TEST(MatchTest, TheCreatorsLiveUntilTheEngineIsDestroyed)
+{
+    destroyedUtilityCreators = 0;
+    auto match = makeMatch(testConfig(1, 2, 0.5), nullptr, [](const TeamConfig& team) { return std::make_unique<TrackedTeamFactory>(team); });
+    match->start();
+    EXPECT_EQ(destroyedUtilityCreators, 0);
+    while (!match->finished()) {
+        match->tick();
+    }
+    match->stop();
+    EXPECT_EQ(destroyedUtilityCreators, 0);
+    match.reset();
+    EXPECT_EQ(destroyedUtilityCreators, 2);
 }
 
 TEST(MatchTest, APlayerWithoutARoleIsAConfigError)

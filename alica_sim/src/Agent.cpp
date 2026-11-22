@@ -28,7 +28,8 @@ Agent::~Agent()
 
 void Agent::start(AlicaCreators&& creators)
 {
-    if (_context->init(std::move(creators)) != 0) {
+    _creators = std::move(creators);
+    if (_context->init(std::move(_creators)) != 0) {
         throw std::runtime_error("agent " + _name + ": the engine failed to initialise");
     }
     _started = true;
