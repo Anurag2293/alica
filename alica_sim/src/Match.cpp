@@ -88,6 +88,7 @@ void writeFile(const fs::path& path, const std::string& content)
     fs::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary);
     out << content;
+    out.close();
     if (!out) {
         throw std::runtime_error("cannot write " + path.string());
     }

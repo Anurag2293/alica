@@ -24,10 +24,10 @@ protected:
     }
     void TearDown() override { fs::remove_all(dir); }
 
-    std::string writeConfig(const std::string& role)
+    std::string writeConfig(const std::string& role, const std::string& duration = "0.1")
     {
         const fs::path file = dir / "match.yaml";
-        std::ofstream(file) << "{world: {plugin: alica_sim_test_world}, dt: 0.01, duration: 0.1, teams: [{name: T, plans: " << ALICA_SIM_TEST_DIR
+        std::ofstream(file) << "{world: {plugin: alica_sim_test_world}, dt: 0.01, duration: " << duration << ", teams: [{name: T, plans: " << ALICA_SIM_TEST_DIR
                             << "/team/plans, libraries: [" << ALICA_SIM_TEST_TEAM_DIR
                             << "], masterPlan: TestMaster, players: [{name: p, id: 1, local: {DefaultRole: " << role << "}}]}]}\n";
         return file.string();
@@ -72,8 +72,10 @@ TEST_F(RunnerTest, AReplayThatCannotBeOpenedExitsWithAnError)
 
 TEST_F(RunnerTest, AReplayThatCannotBeWrittenExitsWithAnError)
 {
-    EXPECT_EQ(run(writeConfig("Player") + " --out '" + (dir / "replay.jsonl").string() + "'", "trap '' XFSZ; ulimit -f 1; "), 1);
+    const std::string replay = (dir / "replay.jsonl").string();
+    EXPECT_EQ(run(writeConfig("Player", "10") + " --out '" + replay + "'", "trap '' XFSZ; ulimit -f 32; "), 1);
     EXPECT_NE(read("stderr").find("cannot write"), std::string::npos) << read("stderr");
+    EXPECT_NE(read("stderr").find("replay"), std::string::npos) << read("stderr");
     EXPECT_EQ(read("stdout"), "");
 }
 
