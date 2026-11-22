@@ -72,6 +72,7 @@ gets its own `SimClock` reading the shared `MatchTime`.
 class Scheduler {
 public:
     using Callback = std::function<void()>;
+    explicit Scheduler(MatchTime&);                           // sets it to each due time
     uint64_t add(Callback cb, AlicaTime period, int owner);   // first fire at the current event time
     void cancel(uint64_t id);                                 // safe from inside a callback
     void runUntil(AlicaTime end);  // fires every entry due before end, in order of
@@ -153,24 +154,29 @@ extern "C" alica::sim::World* alica_sim_create_world();  // exported by a plugin
   one-tick reaction delay.
 - All randomness comes from the seed passed to `configure`.
 - `JsonWriter` is a small streaming writer in `alica_sim` that writes doubles with a fixed
-  format so replays are byte-stable.
+  format so replays are byte-stable: at most six decimals, trailing zeros dropped, `-0` as `0`,
+  and `null` for NaN and infinity.
 
 ### Agent
 
 Owns one `AlicaContext` with: agent name and id; the team's plan folders as config paths; the
 team's role set and master plan; `stepEngine = false`; the shared `SimClock`; a `SimTimerFactory`
-for both timer factories; `SimCommunication` on the team's bus; a logger. Creators come from the
+for both timer factories; `SimCommunication` on the team's bus; the engine's default logger,
+whose verbosity defaults to `WARNING` in the generated config. Creators come from the
 team's `TeamFactory`. The agent's engine configuration is generated, never read from a
 team's folders:
 
 - Player names match `[A-Za-z0-9_-]+` and, with ids, are unique across the match, names
   compared case-insensitively; anything else is a config error.
-- The runner writes `<work>/<n>/<agent>/Alica.yaml`, where `<n>` is the agent's index in the
+- `Match::start` writes `<work>/<n>/<agent>/Alica.yaml`, where `<n>` is the agent's index in the
   match, from the `alica_sim` defaults, the match's `engine` section and the player's `local`
   section (for example `Local.DefaultRole`), always with `Alica.SimulatedTime: true`. It puts
   `<work>/<n>` first on the agent's config paths, where `AlicaContext::initConfig` looks for
   `<agent>/Alica.yaml` before anything else. Each root holds only one agent's file, so the
-  recursive lookup cannot find another agent's config.
+  recursive lookup cannot find another agent's config. `<work>` is a temporary folder removed
+  with the match unless the runner is given `--work DIR`.
+- `local.DefaultRole` is required; the engine aborts on a missing role, so the match reports it
+  as a config error first.
 - An `Alica.yaml` in a team's plan folders is a config error.
 - Engine settings are match-wide. Some are process-wide statics in the engine
   (`Alica.AllowIdling`, `Alica.AssignmentProtectionTime`), so per-team values would silently
@@ -181,22 +187,35 @@ class TeamFactory {
 public:
     virtual ~TeamFactory() = default;
     virtual AlicaCreators creators() = 0;   // called once per agent
-};
+    virtual std::vector<std::pair<std::string, std::string>> libraries() const { return {}; }
+};                                          // library name and resolved file, for provenance
 ```
 
-The runner's default `TeamFactory` uses `alica_dynamic_loading`, which loads behaviour,
-condition and utility libraries by the `libraryName` in the plans from the team's library path.
+The runner's default `TeamFactory`, `DynamicTeamFactory`, uses `alica_dynamic_loading`, which
+loads behaviour, condition and utility libraries by the `libraryName` in the plans. Its
+creators read their search path from `LD_LIBRARY_PATH` when they are constructed, so the
+factory sets it to the team's `libraries` followed by the inherited value while it builds them,
+then restores it. `libraries()` collects every `libraryName` in the team's plan files and
+resolves it the same way.
 
 ### Match
 
 ```cpp
+struct MatchOptions {
+    std::ostream* replay = nullptr;   // where the replay lines go
+    std::string workDir;              // generated engine configs; a temporary folder if empty
+    std::string worldLibrary;         // the world plugin's file, for provenance
+};
+
 class Match {
 public:
-    Match(MatchConfig, std::unique_ptr<World>, std::function<std::unique_ptr<TeamFactory>(const TeamConfig&)>);
-    void start();            // configure the world, create and start every agent
+    Match(MatchConfig, std::unique_ptr<World>, std::function<std::unique_ptr<TeamFactory>(const TeamConfig&)>,
+          MatchOptions = {});
+    void start();            // configure the world, create and start every agent, write the
+                             // header and the frame of tick 0
     void tick();             // one fixed step, see below
     bool finished() const;   // world finished or duration reached
-    void stop();             // terminate every agent
+    void stop();             // terminate every agent, write the result line
 };
 ```
 
@@ -231,7 +250,19 @@ and players with their params. `provenance` identifies everything else the resul
 the `alica_sim` version and build id, and a SHA-256 of each team's compiled plan files (sorted
 by path) and of every library the match loaded (the world plugin and each behaviour, condition
 and utility library), keyed by team and library name, with the resolved path. Each agent's
-generated `Alica.yaml` is included under `match` as `effectiveConfig`.
+generated `Alica.yaml` is included under `match` as `effectiveConfig`, keyed by player name.
+`match.engine` holds the match's `engine` section as written, flattened to dotted keys.
+
+```json
+"provenance": {
+  "alicaSim": { "version": "0.1.0", "build": "<git commit at configure time>" },
+  "world": { "path": "...", "sha256": "..." },
+  "teams": { "Blue": { "plans": "<sha256>", "libraries": { "football_behaviours": { "path": "...", "sha256": "..." } } } }
+}
+```
+
+A team's `plans` hash covers every `.pml .beh .pty .plh .tsk .cnd .rst` file under its plan
+folders, sorted by path relative to its folder; each file adds `<path>\n<size>\n<content>`.
 
 ### Match config
 
@@ -255,23 +286,32 @@ teams:
       - { name: blue1, id: 1, params: { ... }, local: { DefaultRole: Striker } }
 ```
 
-Relative paths are resolved against the config file's folder.
+Relative paths are resolved against the config file's folder. `world.plugin`, `duration`,
+`teams` and, per team, `name`, `plans`, `masterPlan` and `players` (each with `name` and `id`)
+are required. The defaults are `seed: 0`, `dt: 0.01`, `recordEvery: 1`, `roleSet: RoleSet`,
+no `libraries`, and empty `params` and `local`. `engine` takes dotted keys, nested mappings or
+both. Team names are unique.
 
 ### Runner
 
-`alica_sim_run MATCH.yaml [--out replay.jsonl] [--plugin-path DIR]... [--speed X] [--seed N]`
+`alica_sim_run MATCH.yaml [--out replay.jsonl] [--plugin-path DIR]... [--speed X] [--seed N] [--work DIR]`
 
-- `--speed 0` (default) runs as fast as possible; `--speed 1` paces ticks to wall-clock time.
-- Prints the result line to stdout and exits 0 when the match completes; exits non-zero on a
-  config, load or engine error.
+- `--speed 0` (default) runs as fast as possible; `--speed X` starts tick `k` no earlier than
+  `k * dt / X` of wall-clock time.
+- The world plugin `lib<plugin>.so` (`.dylib` on macOS) is looked up in the `--plugin-path`
+  folders, by default the config file's folder.
+- Prints the result line to stdout and exits 0 when the match completes; exits 1 on a config,
+  load or engine error and 2 on a usage error. Engine logs go to stderr, so stdout holds only the
+  result line.
 
 ## Tests
 
 - Scheduler: ordering, multiple fires per pass, cancel during dispatch, create during dispatch,
   no drift over 10^6 ticks.
 - MessageBus: no self-delivery, send order, messages posted during delivery wait, teams isolated.
-- An engine on the sim clock: a test world and the `alica_tests` behaviours; plan transitions
-  happen at the expected match times.
+- An engine on the sim clock: a test world plugin and a small test team (plans compiled with
+  `alicaplan`, behaviours loaded through `alica_dynamic_loading`, both in `alica_sim/test`);
+  plan transitions happen at the expected match times.
 - Simulated time: a behaviour that succeeds in its first `run()` triggers its transition at the
   agent's next engine iteration, and a match of four agents at 30 Hz runs at least 50 times
   faster than real time.
@@ -280,6 +320,7 @@ Relative paths are resolved against the config file's folder.
 - Determinism: one match run twice, and at speed 0 and 1, gives identical replays.
 - Threads: the engine starts no thread during a match (checked by counting threads on Linux and
   macOS before and after start).
+- The runner runs a two-team match end to end and prints the result line.
 
 ## Later
 
