@@ -27,7 +27,7 @@ void Scheduler::cancel(uint64_t id)
 
 void Scheduler::runUntil(AlicaTime end)
 {
-    while (!_queue.empty() && std::get<0>(_queue.top()) < end.inNanoseconds()) {
+    while (!_halted && !_queue.empty() && std::get<0>(_queue.top()) < end.inNanoseconds()) {
         auto [due, owner, id] = _queue.top();
         _queue.pop();
         auto it = _entries.find(id);

@@ -33,6 +33,9 @@ public:
     // Runs action right after the current callback returns, or now when no callback is running.
     void defer(std::function<void()> action);
 
+    // No entry fires after the current callback, in this or any later runUntil.
+    void halt() { _halted = true; }
+
     bool dispatching() const { return _dispatching; }
     size_t size() const { return _entries.size(); }
 
@@ -51,6 +54,7 @@ private:
     std::priority_queue<Key, std::vector<Key>, std::greater<Key>> _queue;
     std::vector<std::function<void()>> _deferred;
     bool _dispatching = false;
+    bool _halted = false;
 };
 
 class SimTimer : public IAlicaTimer

@@ -256,6 +256,11 @@ callback runs before them, so nothing consumes an input earlier than its time:
    (recording, `stop()` and termination hooks) sees the tick's end time.
 6. Record a frame if `tick % recordEvery == 0`.
 
+`stop()` called during a tick (from a behaviour, a message handler or `world.step`) halts the
+scheduler, so no further entry fires, skips the tick's remaining phases and its frame (the tick
+counts only if `world.step` ran), and stops the match when the tick returns: agents terminate,
+the result line is the last line and `finished()` is true. Outside a tick it stops at once.
+
 Agents are created and started in config order: teams in order, players in order.
 
 ### Replay
@@ -365,6 +370,8 @@ at least 1 ns, `duration` at least `dt`, both at most 4e9 s; infinity and NaN ar
   stops after that callback; agents that stop themselves or each other from `onTermination`
   finish cleanly.
 - Logging: with two agents, each agent's log lines carry its own name.
+- A behaviour that stops the match from `init` ends it at once: no later entry fires, no frame
+  follows, and the result line is last.
 - A replay write or flush failure, including a file size limit in the runner, fails the match.
 
 ## Later

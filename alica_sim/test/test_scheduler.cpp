@@ -149,6 +149,20 @@ TEST_F(SchedulerTest, DeferredActionsRunAfterTheCallbackReturns)
     EXPECT_EQ(log, (Log{{"now", 0}}));
 }
 
+TEST_F(SchedulerTest, NothingFiresAfterHalt)
+{
+    scheduler.add(
+            [&]() {
+                log.emplace_back("a", time.now().inNanoseconds());
+                scheduler.halt();
+            },
+            ms(10), 0);
+    scheduler.add(record("b"), ms(10), 1);
+    scheduler.runUntil(ms(100));
+    scheduler.runUntil(ms(200));
+    EXPECT_EQ(log, (Log{{"a", 0}}));
+}
+
 TEST_F(SchedulerTest, RejectsAZeroPeriod)
 {
     EXPECT_THROW(scheduler.add(record("a"), AlicaTime::zero(), 0), std::invalid_argument);

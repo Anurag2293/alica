@@ -182,29 +182,48 @@ void Match::start()
 
 void Match::tick()
 {
+    if (!_started || _stopped) {
+        return;
+    }
+    _ticking = true;
     const AlicaTime t = _config.dt * _tick;
     _time.set(t);
     for (auto& bus : _buses) {
         bus->deliver();
     }
-    _world->sense(t);
-    _scheduler.runUntil(t + _config.dt);
-    _world->step(t, _config.dt);
-    ++_tick;
-    _time.set(_config.dt * _tick);
-    if (_tick % _config.recordEvery == 0) {
-        recordFrame();
+    if (!_stopRequested) {
+        _world->sense(t);
+    }
+    if (!_stopRequested) {
+        _scheduler.runUntil(t + _config.dt);
+    }
+    if (!_stopRequested) {
+        _world->step(t, _config.dt);
+        ++_tick;
+        _time.set(_config.dt * _tick);
+        if (!_stopRequested && _tick % _config.recordEvery == 0) {
+            recordFrame();
+        }
+    }
+    _ticking = false;
+    if (_stopRequested) {
+        stop();
     }
 }
 
 bool Match::finished() const
 {
-    return _world->finished() || _time.now() >= _config.duration;
+    return _stopped || _stopRequested || _world->finished() || _time.now() >= _config.duration;
 }
 
 void Match::stop()
 {
     if (!_started || _stopped) {
+        return;
+    }
+    if (_ticking) {
+        _stopRequested = true;
+        _scheduler.halt();
         return;
     }
     _stopped = true;

@@ -38,6 +38,7 @@ public:
     void start();
     void tick();
     bool finished() const;
+    // Called during a tick, it halts the scheduler and the tick ends without further phases or a frame.
     void stop();
 
     AlicaTime now() const { return _time.now(); }
@@ -69,6 +70,8 @@ private:
     int64_t _tick = 0;
     bool _started = false;
     bool _stopped = false;
+    bool _ticking = false;
+    bool _stopRequested = false;
     std::string _resultLine;
     JsonWriter _writer;
 };

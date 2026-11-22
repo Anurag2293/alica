@@ -466,6 +466,41 @@ TEST(MatchTest, LogLinesCarryTheNameOfTheAgentThatWroteThem)
     }
 }
 
+TEST(MatchTest, AStopFromABehaviourEndsTheMatchCleanly)
+{
+    MatchConfig config = testConfig(1, 2, 1.5);
+    config.recordEvery = 1;
+    std::ostringstream replay;
+    auto match = makeMatch(config, &replay);
+    match->start();
+    io(*match, "t0p0").onEvent = [&](const std::string& what) {
+        if (what == "Walk.init") {
+            match->stop();
+        }
+    };
+    while (!match->finished()) {
+        match->tick();
+    }
+    match->stop();
+
+    EXPECT_FALSE(match->agent("t0p0").running());
+    EXPECT_FALSE(match->agent("t0p1").running());
+    EXPECT_EQ(match->ticks(), 3);
+    EXPECT_EQ(io(*match, "t0p0").events.back(), (std::pair<std::string, int64_t>{"Walk.init", kPeriod}));
+    EXPECT_EQ(io(*match, "t0p1").events.back(), (std::pair<std::string, int64_t>{"SucceedFirst.run", 33000000}));
+    std::istringstream lines(replay.str());
+    std::vector<std::string> all;
+    for (std::string line; std::getline(lines, line);) {
+        all.push_back(line);
+    }
+    ASSERT_EQ(all.size(), 6u);
+    for (int tick = 0; tick <= 3; ++tick) {
+        EXPECT_EQ(YAML::Load(all[1 + tick])["tick"].as<int>(), tick);
+    }
+    EXPECT_TRUE(YAML::Load(all.back())["result"]);
+    EXPECT_EQ(YAML::Load(all.back())["ticks"].as<int>(), 3);
+}
+
 TEST(MatchTest, APlayerWithoutARoleIsAConfigError)
 {
     MatchConfig config = testConfig(1, 1, 1);
