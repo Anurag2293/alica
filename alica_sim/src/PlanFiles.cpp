@@ -6,6 +6,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <deque>
 #include <functional>
@@ -90,47 +91,72 @@ struct Reference
     int64_t id;
 };
 
-bool parseReference(const std::string& s, Reference& ref)
+const std::set<std::string> kReferenceKeys{"abstractPlan", "condition", "inState", "inTransitions", "outState", "outTransitions", "parentPlan", "plan", "scope",
+        "state", "subPlan", "subVariable", "synchronisation", "syncedTransitions", "task", "variable", "variables"};
+
+void addReference(const YAML::Node& value, const std::string& key, const std::string& path, std::vector<Reference>& references)
 {
+    if (!value.IsScalar()) {
+        return;
+    }
+    const std::string& s = value.Scalar();
     const size_t hash = s.find_last_of('#');
     if (hash == std::string::npos) {
-        return false;
+        return;
+    }
+    const std::string id = s.substr(hash + 1);
+    if (id.empty() || !std::all_of(id.begin(), id.end(), [](char c) { return std::isdigit(static_cast<unsigned char>(c)); }) || id.size() > 19) {
+        throw ConfigError(path + ": '" + key + "' holds the malformed reference '" + s + "'");
     }
     std::string file = s.substr(0, hash);
     if (const size_t slash = file.find_last_of('/'); slash != std::string::npos) {
         file = file.substr(slash + 1);
     }
-    if (!isPlanFile(file)) {
-        return false;
+    if (!file.empty() && isPlanFile(file)) {
+        references.push_back({file, std::stoll(id)});
     }
-    try {
-        ref = {file, std::stoll(s.substr(hash + 1))};
-    } catch (const std::exception&) {
-        return false;
-    }
-    return true;
 }
 
-void scan(const YAML::Node& node, bool collectLibraries, std::set<std::string>& libraries, std::vector<Reference>& references)
+void scan(const YAML::Node& node, const std::string& path, bool collectLibraries, std::set<std::string>& libraries, std::vector<Reference>& references)
 {
-    if (node.IsMap()) {
-        for (const auto& kv : node) {
-            if (collectLibraries && kv.first.Scalar() == "libraryName" && kv.second.IsScalar()) {
-                if (!kv.second.Scalar().empty()) {
-                    libraries.insert(kv.second.Scalar());
-                }
-            } else {
-                scan(kv.second, collectLibraries, libraries, references);
-            }
-        }
-    } else if (node.IsSequence()) {
+    if (node.IsSequence()) {
         for (const auto& item : node) {
-            scan(item, collectLibraries, libraries, references);
+            scan(item, path, collectLibraries, libraries, references);
         }
-    } else if (node.IsScalar()) {
-        Reference ref;
-        if (parseReference(node.Scalar(), ref)) {
-            references.push_back(ref);
+        return;
+    }
+    if (!node.IsMap()) {
+        return;
+    }
+    for (const auto& kv : node) {
+        const std::string& key = kv.first.Scalar();
+        const YAML::Node& value = kv.second;
+        if (key == "libraryName") {
+            if (collectLibraries && value.IsScalar() && !value.Scalar().empty()) {
+                libraries.insert(value.Scalar());
+            }
+        } else if (key == "taskPriorities" && value.IsMap()) {
+            for (const auto& priority : value) {
+                addReference(priority.first, key, path, references);
+            }
+        } else if (key == "annotatedPlans" && value.IsSequence()) {
+            for (const auto& annotated : value) {
+                if (annotated.IsMap() && annotated["activated"] && annotated["activated"].as<bool>(false)) {
+                    addReference(annotated["plan"], "plan", path, references);
+                }
+            }
+        } else if (kReferenceKeys.count(key) && value.IsScalar()) {
+            addReference(value, key, path, references);
+        } else if (kReferenceKeys.count(key) && value.IsSequence()) {
+            for (const auto& item : value) {
+                if (item.IsScalar()) {
+                    addReference(item, key, path, references);
+                } else {
+                    scan(item, path, collectLibraries, libraries, references);
+                }
+            }
+        } else {
+            scan(value, path, collectLibraries, libraries, references);
         }
     }
 }
@@ -228,12 +254,14 @@ std::set<std::string> planTreeLibraries(const std::vector<std::string>& folders,
             throw ConfigError("cannot find " + name + " in the plan tree of " + masterPlan);
         }
         const std::string ext = extension(name);
+        if (ext == ".rst") {
+            throw ConfigError(path + " is a role set, which a plan tree cannot reference");
+        }
         if (ext == ".cnd") {
             conditionFiles[name] = path;
-            continue;
         }
         std::vector<Reference> references;
-        scan(load(path), ext == ".pml" || ext == ".beh", libraries, references);
+        scan(load(path), path, ext == ".pml" || ext == ".beh", libraries, references);
         for (const Reference& ref : references) {
             if (extension(ref.file) == ".cnd") {
                 conditionIds[ref.file].insert(ref.id);

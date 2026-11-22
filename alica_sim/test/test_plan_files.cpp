@@ -86,6 +86,33 @@ TEST_F(PlanFilesTest, LibrariesComeFromThePlanTreeOnly)
     EXPECT_EQ(planTreeLibraries({root.string()}, "TestMaster"), (std::set<std::string>{"alica_sim_test_team"}));
 }
 
+void replaceInFile(const fs::path& file, const std::string& from, const std::string& to)
+{
+    std::ifstream in(file);
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    const size_t at = text.find(from);
+    ASSERT_NE(at, std::string::npos) << from;
+    text.replace(at, from.size(), to);
+    std::ofstream(file) << text;
+}
+
+TEST_F(PlanFilesTest, OnlyReferenceFieldsAreFollowed)
+{
+    fs::copy(plans, root, fs::copy_options::recursive);
+    replaceInFile(root / "TestMaster.pml", R"("comment": "",)", R"("comment": "see Missing.beh#12 for the old id, and Walk.beh#3x",)");
+    replaceInFile(root / "TestMaster.pml", R"("name": "Start",)", R"("name": "Old.pml#1",)");
+    EXPECT_EQ(planTreeLibraries({root.string()}, "TestMaster"), (std::set<std::string>{"alica_sim_test_team"}));
+}
+
+TEST_F(PlanFilesTest, AMalformedReferenceIsAConfigError)
+{
+    fs::copy(plans, root, fs::copy_options::recursive);
+    replaceInFile(root / "TestMaster.pml", R"("condition": "ConditionRepository.cnd#546003087934931146")",
+            R"("condition": "ConditionRepository.cnd#546003087934931146 old")");
+    EXPECT_THROW(planTreeLibraries({root.string()}, "TestMaster"), ConfigError);
+}
+
 TEST_F(PlanFilesTest, AMissingFileInThePlanTreeIsAConfigError)
 {
     fs::copy(plans, root, fs::copy_options::recursive);

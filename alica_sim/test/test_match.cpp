@@ -242,6 +242,21 @@ TEST(MatchTest, AnInvalidEngineOptionIsAConfigError)
     EXPECT_THROW(match->start(), ConfigError);
 }
 
+TEST(MatchTest, AReferenceInACommentDoesNotStopTheMatch)
+{
+    const fs::path dir = copyPlans("with_reference_comment");
+    const fs::path master = dir / "TestMaster.pml";
+    std::ifstream in(master);
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    text.replace(text.find(R"("comment": "",)"), 14, R"("comment": "see Walk.beh#12 for the old id",)");
+    std::ofstream(master) << text;
+    auto match = makeMatch(testConfig(1, 1, 0.2, dir.string()));
+    runMatch(*match, 0);
+    EXPECT_EQ(match->ticks(), 20);
+    fs::remove_all(dir);
+}
+
 TEST(MatchTest, AnUnusedPlanWithAnUnknownLibraryDoesNotStopTheMatch)
 {
     const fs::path dir = copyPlans("with_unused_plan");

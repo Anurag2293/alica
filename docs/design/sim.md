@@ -186,7 +186,9 @@ team's folders:
   unknown default role and on engine options it rejects. Before it creates the work folder,
   configures the world or starts any engine, `Match::start` checks all of them for every team
   and player with the engine's own lookup rules, and reports a config error instead: the master
-  plan and every file the tree references exist in the plan folders, the role set exists (the
+  plan and every file the tree references exist in the plan folders (following only the fields
+  the engine reads as references, such as `abstractPlan`, `condition` or `task`, where the id
+  after `#` must be digits; text in other fields is ignored), the role set exists (the
   named `.rst` file, or else a `defaultRoleSet` file directly in a plan folder), every player's
   `local.DefaultRole` is a role in it, `0 < EngineFrequency <= 1000`,
   `0 < MinBroadcastFrequency <= MaxBroadcastFrequency <= EngineFrequency`, the status message
