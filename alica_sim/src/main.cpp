@@ -108,6 +108,12 @@ int main(int argc, char** argv)
                 config, std::move(world.world), [](const alica::sim::TeamConfig& team) { return std::make_unique<alica::sim::DynamicTeamFactory>(team); },
                 options);
         alica::sim::runMatch(match, speed);
+        if (out.is_open()) {
+            out.close();
+            if (!out) {
+                throw std::runtime_error("cannot write " + outPath);
+            }
+        }
 
         std::string line = match.resultLine() + "\n";
         if (write(resultFd, line.data(), line.size()) != static_cast<ssize_t>(line.size())) {

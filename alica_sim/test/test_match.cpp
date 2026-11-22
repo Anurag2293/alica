@@ -318,6 +318,53 @@ TEST(MatchTest, AnAgentStoppingItselfInACallbackStopsAfterTheCallbackReturns)
     match->stop();
 }
 
+class LimitedBuffer : public std::streambuf
+{
+public:
+    LimitedBuffer(size_t limit, bool failSync)
+            : _limit(limit)
+            , _failSync(failSync)
+    {
+    }
+
+protected:
+    int_type overflow(int_type c) override
+    {
+        if (_written >= _limit) {
+            return traits_type::eof();
+        }
+        ++_written;
+        return traits_type::not_eof(c);
+    }
+    int sync() override { return _failSync ? -1 : 0; }
+
+private:
+    size_t _written = 0;
+    size_t _limit;
+    bool _failSync;
+};
+
+TEST(MatchTest, AReplayWriteFailureStopsTheMatch)
+{
+    const size_t headerAndFirstFrame = runToReplay(testConfig(1, 1, 1), 0).find("\"tick\":5");
+    for (size_t limit : {size_t(0), headerAndFirstFrame}) {
+        LimitedBuffer buffer(limit, false);
+        std::ostream replay(&buffer);
+        auto match = makeMatch(testConfig(1, 1, 1), &replay);
+        EXPECT_THROW(runMatch(*match, 0), std::runtime_error) << limit;
+        EXPECT_LT(match->ticks(), 100) << limit;
+    }
+}
+
+TEST(MatchTest, AReplayFlushFailureStopsTheMatch)
+{
+    LimitedBuffer buffer(SIZE_MAX, true);
+    std::ostream replay(&buffer);
+    auto match = makeMatch(testConfig(1, 1, 1), &replay);
+    EXPECT_THROW(runMatch(*match, 0), std::runtime_error);
+    EXPECT_EQ(match->ticks(), 100);
+}
+
 TEST(MatchTest, APlayerWithoutARoleIsAConfigError)
 {
     MatchConfig config = testConfig(1, 1, 1);

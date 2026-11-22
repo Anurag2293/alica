@@ -213,8 +213,8 @@ void Match::stop()
     _writer.endObject();
     _resultLine = _writer.str();
     writeLine();
-    if (_options.replay) {
-        _options.replay->flush();
+    if (_options.replay && !_options.replay->flush()) {
+        throw std::runtime_error("cannot write the replay");
     }
 }
 
@@ -308,8 +308,8 @@ void Match::recordFrame()
 
 void Match::writeLine()
 {
-    if (_options.replay) {
-        *_options.replay << _writer.str() << '\n';
+    if (_options.replay && !(*_options.replay << _writer.str() << '\n')) {
+        throw std::runtime_error("cannot write the replay");
     }
 }
 

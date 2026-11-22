@@ -33,10 +33,10 @@ protected:
         return file.string();
     }
 
-    int run(const std::string& args)
+    int run(const std::string& args, const std::string& shellPrefix = "")
     {
         std::ostringstream command;
-        command << "'" << ALICA_SIM_RUN << "' " << args << " --plugin-path '" << ALICA_SIM_TEST_WORLD_DIR << "' >'" << (dir / "stdout").string() << "' 2>'"
+        command << shellPrefix << "'" << ALICA_SIM_RUN << "' " << args << " --plugin-path '" << ALICA_SIM_TEST_WORLD_DIR << "' >'" << (dir / "stdout").string() << "' 2>'"
                 << (dir / "stderr").string() << "'";
         const int status = std::system(command.str().c_str());
         return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
@@ -62,6 +62,28 @@ TEST_F(RunnerTest, AnUnknownRoleExitsWithAConfigError)
     EXPECT_EQ(run(writeConfig("Goalie")), 1);
     EXPECT_NE(read("stderr").find("role Goalie"), std::string::npos) << read("stderr");
     EXPECT_EQ(read("stdout"), "");
+}
+
+TEST_F(RunnerTest, AReplayThatCannotBeOpenedExitsWithAnError)
+{
+    EXPECT_EQ(run(writeConfig("Player") + " --out '" + (dir / "missing/replay.jsonl").string() + "'"), 1);
+    EXPECT_NE(read("stderr").find("cannot write"), std::string::npos) << read("stderr");
+}
+
+TEST_F(RunnerTest, AReplayThatCannotBeWrittenExitsWithAnError)
+{
+    EXPECT_EQ(run(writeConfig("Player") + " --out '" + (dir / "replay.jsonl").string() + "'", "trap '' XFSZ; ulimit -f 1; "), 1);
+    EXPECT_NE(read("stderr").find("cannot write"), std::string::npos) << read("stderr");
+    EXPECT_EQ(read("stdout"), "");
+}
+
+TEST_F(RunnerTest, AFullDeviceExitsWithAnError)
+{
+    if (!fs::exists("/dev/full")) {
+        GTEST_SKIP() << "no /dev/full";
+    }
+    EXPECT_EQ(run(writeConfig("Player") + " --out /dev/full"), 1);
+    EXPECT_NE(read("stderr").find("cannot write"), std::string::npos) << read("stderr");
 }
 
 } // namespace
