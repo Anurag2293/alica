@@ -365,6 +365,54 @@ TEST(MatchTest, AReplayFlushFailureStopsTheMatch)
     EXPECT_EQ(match->ticks(), 100);
 }
 
+TEST(MatchTest, AnAgentStoppingItselfWhileTerminatingFinishesCleanly)
+{
+    auto match = makeMatch(testConfig(1, 1, 1.5));
+    match->start();
+    Agent& agent = match->agent("t0p0");
+    int terminations = 0;
+    io(*match, "t0p0").onEvent = [&](const std::string& what) {
+        if (what == "Rest.terminate") {
+            ++terminations;
+            agent.stop();
+        }
+    };
+    while (!match->finished()) {
+        match->tick();
+    }
+    match->stop();
+    EXPECT_EQ(terminations, 1);
+    EXPECT_FALSE(agent.running());
+}
+
+TEST(MatchTest, TwoAgentsStoppingEachOtherWhileTerminatingFinishCleanly)
+{
+    auto match = makeMatch(testConfig(1, 2, 1.5));
+    match->start();
+    Agent& first = match->agent("t0p0");
+    Agent& second = match->agent("t0p1");
+    int terminations = 0;
+    io(*match, "t0p0").onEvent = [&](const std::string& what) {
+        if (what == "Rest.terminate") {
+            ++terminations;
+            second.stop();
+        }
+    };
+    io(*match, "t0p1").onEvent = [&](const std::string& what) {
+        if (what == "Rest.terminate") {
+            ++terminations;
+            first.stop();
+        }
+    };
+    while (!match->finished()) {
+        match->tick();
+    }
+    match->stop();
+    EXPECT_EQ(terminations, 2);
+    EXPECT_FALSE(first.running());
+    EXPECT_FALSE(second.running());
+}
+
 TEST(MatchTest, APlayerWithoutARoleIsAConfigError)
 {
     MatchConfig config = testConfig(1, 1, 1);

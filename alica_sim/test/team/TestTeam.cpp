@@ -46,6 +46,14 @@ protected:
         io(*getGlobalBlackboard()).vx = _speed;
     }
 
+    void onTermination() override
+    {
+        TestIO& testIO = io(*getGlobalBlackboard());
+        if (testIO.onEvent) {
+            testIO.onEvent(getName() + ".terminate");
+        }
+    }
+
     double _speed;
 };
 

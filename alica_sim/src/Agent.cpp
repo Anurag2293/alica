@@ -44,8 +44,8 @@ void Agent::stop()
 void Agent::stopNow()
 {
     if (_started) {
-        _context->terminate();
         _started = false;
+        _context->terminate();
     }
 }
 
