@@ -32,7 +32,13 @@ void rejectEngineConfig(const TeamConfig& team)
         if (!fs::is_directory(folder)) {
             throw ConfigError("team " + team.name + ": plan folder " + folder + " does not exist");
         }
-        for (const PlanFile& file : listFiles({folder})) {
+        std::vector<PlanFile> files;
+        try {
+            files = listFiles({folder});
+        } catch (const ConfigError& e) {
+            throw ConfigError("team " + team.name + ": " + e.what());
+        }
+        for (const PlanFile& file : files) {
             if (fs::path(file.relative).filename() == "Alica.yaml") {
                 throw ConfigError("team " + team.name + ": " + file.path + " is not allowed, engine options belong in the match config");
             }

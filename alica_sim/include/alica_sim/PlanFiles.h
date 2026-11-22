@@ -17,7 +17,7 @@ struct PlanFile
 bool isPlanFile(const std::filesystem::path& path);
 
 // Every file under the folders, following symlinked directories like the engine's FileSystem::findFile,
-// in folder order and then the engine's search order.
+// in folder order and then the engine's search order. A symlink cycle is a ConfigError.
 std::vector<PlanFile> listFiles(const std::vector<std::string>& folders);
 
 std::string findPlanFile(const std::vector<std::string>& folders, const std::string& fileName);

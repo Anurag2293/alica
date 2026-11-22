@@ -46,7 +46,7 @@ bool walk(const std::string& dir, const std::string& relative, std::vector<DirId
     }
     const DirId id{st.st_dev, st.st_ino};
     if (std::find(ancestors.begin(), ancestors.end(), id) != ancestors.end()) {
-        return false;
+        throw ConfigError(dir + " is a symlink cycle; the engine's file search would never end");
     }
     ancestors.push_back(id);
     bool stop = false;

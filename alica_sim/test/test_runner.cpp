@@ -24,11 +24,11 @@ protected:
     }
     void TearDown() override { fs::remove_all(dir); }
 
-    std::string writeConfig(const std::string& role, const std::string& duration = "0.1")
+    std::string writeConfig(const std::string& role, const std::string& duration = "0.1", const std::string& plans = ALICA_SIM_TEST_DIR "/team/plans")
     {
         const fs::path file = dir / "match.yaml";
-        std::ofstream(file) << "{world: {plugin: alica_sim_test_world}, dt: 0.01, duration: " << duration << ", teams: [{name: T, plans: " << ALICA_SIM_TEST_DIR
-                            << "/team/plans, libraries: [" << ALICA_SIM_TEST_TEAM_DIR
+        std::ofstream(file) << "{world: {plugin: alica_sim_test_world}, dt: 0.01, duration: " << duration << ", teams: [{name: T, plans: " << plans
+                            << ", libraries: [" << ALICA_SIM_TEST_TEAM_DIR
                             << "], masterPlan: TestMaster, players: [{name: p, id: 1, local: {DefaultRole: " << role << "}}]}]}\n";
         return file.string();
     }
@@ -61,6 +61,17 @@ TEST_F(RunnerTest, AnUnknownRoleExitsWithAConfigError)
 {
     EXPECT_EQ(run(writeConfig("Goalie")), 1);
     EXPECT_NE(read("stderr").find("role Goalie"), std::string::npos) << read("stderr");
+    EXPECT_EQ(read("stdout"), "");
+}
+
+TEST_F(RunnerTest, ASymlinkCycleBeforeTheMasterPlanExitsWithAConfigError)
+{
+    const fs::path plans = dir / "plans";
+    fs::create_directories(plans);
+    fs::copy(fs::path(ALICA_SIM_TEST_DIR) / "team/plans", plans, fs::copy_options::recursive);
+    fs::create_directory_symlink(plans, plans / "A");
+    EXPECT_EQ(run(writeConfig("Player", "0.1", plans.string())), 1);
+    EXPECT_NE(read("stderr").find("symlink cycle"), std::string::npos) << read("stderr");
     EXPECT_EQ(read("stdout"), "");
 }
 

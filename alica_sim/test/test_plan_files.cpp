@@ -56,13 +56,23 @@ TEST_F(PlanFilesTest, FollowsSymlinkedDirectoriesLikeTheEngine)
     EXPECT_EQ(planTreeLibraries({(root / "linked").string()}, "TestMaster"), (std::set<std::string>{"alica_sim_test_team"}));
 }
 
-TEST_F(PlanFilesTest, ASymlinkCycleIsVisitedOnce)
+TEST_F(PlanFilesTest, ASymlinkCycleIsAConfigError)
 {
     fs::copy(plans, root, fs::copy_options::recursive);
-    fs::create_directory_symlink(root, root / "loop");
+    fs::create_directories(root / "sub");
+    fs::create_directory_symlink(root, root / "sub/loop");
+    EXPECT_THROW(listFiles({root.string()}), ConfigError);
+}
+
+TEST_F(PlanFilesTest, TheSameFolderLinkedTwiceIsNotACycle)
+{
+    fs::create_directories(root / "real");
+    fs::copy(plans, root / "real", fs::copy_options::recursive);
+    fs::create_directory_symlink(root / "real", root / "one");
+    fs::create_directory_symlink(root / "real", root / "two");
     const std::vector<std::string> files = relatives(root.string());
-    EXPECT_EQ(std::count(files.begin(), files.end(), "TestMaster.pml"), 1);
-    EXPECT_EQ(std::count_if(files.begin(), files.end(), [](const std::string& f) { return f.rfind("loop/", 0) == 0; }), 0);
+    EXPECT_EQ(std::count(files.begin(), files.end(), "one/TestMaster.pml"), 1);
+    EXPECT_EQ(std::count(files.begin(), files.end(), "two/TestMaster.pml"), 1);
 }
 
 TEST_F(PlanFilesTest, LibrariesComeFromThePlanTreeOnly)
