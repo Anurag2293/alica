@@ -36,10 +36,34 @@ void Scheduler::runUntil(AlicaTime end)
         std::shared_ptr<Callback> cb = it->second.cb;
         int64_t next = due + it->second.period.inNanoseconds();
         _time.set(AlicaTime::nanoseconds(due));
-        (*cb)();
+        _dispatching = true;
+        try {
+            (*cb)();
+        } catch (...) {
+            _dispatching = false;
+            _deferred.clear();
+            throw;
+        }
+        _dispatching = false;
+        while (!_deferred.empty()) {
+            std::vector<std::function<void()>> actions;
+            actions.swap(_deferred);
+            for (auto& action : actions) {
+                action();
+            }
+        }
         if (_entries.count(id)) {
             _queue.emplace(next, owner, id);
         }
+    }
+}
+
+void Scheduler::defer(std::function<void()> action)
+{
+    if (_dispatching) {
+        _deferred.push_back(std::move(action));
+    } else {
+        action();
     }
 }
 

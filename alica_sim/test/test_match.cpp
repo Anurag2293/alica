@@ -296,6 +296,28 @@ TEST(MatchTest, TheCreatorsLiveUntilTheEngineIsDestroyed)
     EXPECT_EQ(destroyedUtilityCreators, 2);
 }
 
+TEST(MatchTest, AnAgentStoppingItselfInACallbackStopsAfterTheCallbackReturns)
+{
+    auto match = makeMatch(testConfig(1, 2, 1.5));
+    match->start();
+    Agent& agent = match->agent("t0p0");
+    bool runningRightAfterStop = false;
+    io(*match, "t0p0").onEvent = [&](const std::string& what) {
+        if (what == "Walk.init") {
+            agent.stop();
+            runningRightAfterStop = agent.running();
+        }
+    };
+    while (!match->finished()) {
+        match->tick();
+    }
+    EXPECT_TRUE(runningRightAfterStop);
+    EXPECT_FALSE(agent.running());
+    EXPECT_EQ(io(*match, "t0p0").events.back(), (std::pair<std::string, int64_t>{"Walk.init", kPeriod}));
+    EXPECT_EQ(io(*match, "t0p1").events.back(), (std::pair<std::string, int64_t>{"Rest.init", 31 * kPeriod}));
+    match->stop();
+}
+
 TEST(MatchTest, APlayerWithoutARoleIsAConfigError)
 {
     MatchConfig config = testConfig(1, 1, 1);

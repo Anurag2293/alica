@@ -33,7 +33,11 @@ public:
 protected:
     void log(const std::string& what)
     {
-        io(*getGlobalBlackboard()).events.emplace_back(getName() + "." + what, getPlanContext()->getAlicaClock().now().inNanoseconds());
+        TestIO& testIO = io(*getGlobalBlackboard());
+        testIO.events.emplace_back(getName() + "." + what, getPlanContext()->getAlicaClock().now().inNanoseconds());
+        if (testIO.onEvent) {
+            testIO.onEvent(getName() + "." + what);
+        }
     }
 
     void initialiseParameters() override

@@ -38,9 +38,13 @@ public:
 
     AlicaContext& context() { return *_context; }
     const std::string& name() const { return _name; }
+    bool running() const { return _started; }
 
 private:
+    void stopNow();
+
     std::string _name;
+    Scheduler& _scheduler;
     AlicaCreators _creators;
     std::unique_ptr<AlicaContext> _context;
     bool _started = false;

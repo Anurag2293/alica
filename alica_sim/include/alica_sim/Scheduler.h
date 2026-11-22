@@ -29,7 +29,10 @@ public:
     uint64_t add(Callback cb, AlicaTime period, int owner);
     void cancel(uint64_t id);
     void runUntil(AlicaTime end);
+    // Runs action right after the current callback returns, or now when no callback is running.
+    void defer(std::function<void()> action);
 
+    bool dispatching() const { return _dispatching; }
     size_t size() const { return _entries.size(); }
 
 private:
@@ -45,6 +48,8 @@ private:
     uint64_t _nextId = 1;
     std::unordered_map<uint64_t, Entry> _entries;
     std::priority_queue<Key, std::vector<Key>, std::greater<Key>> _queue;
+    std::vector<std::function<void()>> _deferred;
+    bool _dispatching = false;
 };
 
 class SimTimer : public IAlicaTimer

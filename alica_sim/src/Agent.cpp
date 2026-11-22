@@ -10,6 +10,7 @@ namespace alica::sim
 Agent::Agent(const AgentSpec& spec, const TeamConfig& team, const std::string& configDir, const MatchTime& time, Scheduler& scheduler, int owner,
         MessageBus& bus, std::any io)
         : _name(spec.name)
+        , _scheduler(scheduler)
 {
     std::vector<std::string> configPaths{configDir};
     configPaths.insert(configPaths.end(), team.plans.begin(), team.plans.end());
@@ -23,7 +24,7 @@ Agent::Agent(const AgentSpec& spec, const TeamConfig& team, const std::string& c
 
 Agent::~Agent()
 {
-    stop();
+    stopNow();
 }
 
 void Agent::start(AlicaCreators&& creators)
@@ -36,6 +37,11 @@ void Agent::start(AlicaCreators&& creators)
 }
 
 void Agent::stop()
+{
+    _scheduler.defer([this]() { stopNow(); });
+}
+
+void Agent::stopNow()
 {
     if (_started) {
         _context->terminate();

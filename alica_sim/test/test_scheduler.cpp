@@ -130,6 +130,25 @@ TEST_F(SchedulerTest, DestroyingATimerCancelsIt)
     EXPECT_EQ(scheduler.size(), 0u);
 }
 
+TEST_F(SchedulerTest, DeferredActionsRunAfterTheCallbackReturns)
+{
+    scheduler.add(
+            [&]() {
+                scheduler.defer([&]() {
+                    log.emplace_back("deferred", time.now().inNanoseconds());
+                    EXPECT_FALSE(scheduler.dispatching());
+                });
+                log.emplace_back("a", time.now().inNanoseconds());
+            },
+            ms(10), 0);
+    scheduler.add(record("b"), ms(10), 1);
+    scheduler.runUntil(ms(1));
+    EXPECT_EQ(log, (Log{{"a", 0}, {"deferred", 0}, {"b", 0}}));
+    log.clear();
+    scheduler.defer(record("now"));
+    EXPECT_EQ(log, (Log{{"now", 0}}));
+}
+
 TEST_F(SchedulerTest, RejectsAZeroPeriod)
 {
     EXPECT_THROW(scheduler.add(record("a"), AlicaTime::zero(), 0), std::invalid_argument);
