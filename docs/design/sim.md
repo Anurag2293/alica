@@ -28,6 +28,15 @@ The engine runs with `stepEngine = false`. Its loop sleeps the rest of its perio
 clock, and `SimClock::sleep` does nothing. `AlicaContext::stepEngine()` is not used: it waits on
 a condition variable with a wall-clock timeout.
 
+One engine change is needed. At the end of each iteration `PlanBase::run()` waits on
+`_fpEventWait` for the rest of the loop period in wall-clock time, to pick up fast-path events
+(behaviours finishing early), whatever the clock. On a sim clock that wait blocks the match
+thread for a full engine period per agent per iteration. A new engine option,
+`Alica.SimulatedTime` (default `false`), makes the loop skip the wait and instead process the
+fast-path events already queued, without a time limit. Behaviours run on the match thread
+between engine iterations, so their events are picked up deterministically at the next engine
+iteration.
+
 `alica_dummy_proxy` is not used. It delivers through process-wide queues on its own thread, so
 delivery order varies between runs and every engine in the process hears every other one.
 
@@ -38,15 +47,22 @@ Namespace `alica::sim`, package `alica_sim` (library `alica_sim`, runner `alica_
 ### SimClock
 
 ```cpp
-class SimClock : public alica::AlicaClock {
+class MatchTime {                            // one per match, owned by the Match
 public:
-    AlicaTime now() const override;          // the match time
-    void sleep(const AlicaTime&) const override {}
+    AlicaTime now() const;
     void set(AlicaTime t);
+};
+
+class SimClock : public alica::AlicaClock {  // one per agent, a view of the match time
+public:
+    explicit SimClock(const MatchTime&);
+    AlicaTime now() const override;
+    void sleep(const AlicaTime&) const override {}
 };
 ```
 
-One per match, shared by all agents.
+`AlicaContext` owns its clock and `setClock<SimClock>(matchTime)` constructs it, so each agent
+gets its own `SimClock` reading the shared `MatchTime`.
 
 ### Scheduler, SimTimer, SimTimerFactory
 
@@ -54,7 +70,7 @@ One per match, shared by all agents.
 class Scheduler {
 public:
     using Callback = std::function<void()>;
-    uint64_t add(Callback cb, AlicaTime period, int owner);   // first fire at now + period
+    uint64_t add(Callback cb, AlicaTime period, int owner);   // first fire at now
     void cancel(uint64_t id);                                 // safe from inside a callback
     void advanceTo(AlicaTime t);   // fires every entry due at or before t, in order of
                                    // (due time, owner, creation sequence); due += period
@@ -70,10 +86,11 @@ public:
 ```
 
 - An entry that is due several times within one `advanceTo` fires once per due time, in order.
-- A timer created inside a callback first fires one period later, never in the same pass at the
-  same due time.
+- A new timer first fires at the current match time, like `AlicaSystemTimer`, which calls its
+  callback before its first sleep. A timer created inside a callback during `advanceTo(t)` fires
+  later in the same pass, in (due time, owner, creation sequence) order; it cannot fire twice at
+  `t` because the period is positive.
 - A cancelled entry never fires again, even if it was already collected for this pass.
-- The first-fire delay matches `AlicaSystemTimer`; a test pins it.
 - A period of zero is rejected.
 
 ### MessageBus, SimCommunication
@@ -139,7 +156,7 @@ Owns one `AlicaContext` with: agent name and id; the team's plan folders as conf
 team's role set and master plan; `stepEngine = false`; the shared `SimClock`; a `SimTimerFactory`
 for both timer factories; `SimCommunication` on the team's bus; a logger. Creators come from the
 team's `TeamFactory`. Engine options (for example `Alica.EngineFrequency`) are set from the
-match config with `setOption`.
+match config with `setOption`; the runner always sets `Alica.SimulatedTime: true`.
 
 ```cpp
 class TeamFactory {
@@ -180,11 +197,16 @@ Agents are created and started in config order: teams in order, players in order
 
 JSON Lines, one object per line:
 
-1. Header: `{"format": "alica-sim-replay", "version": 1, "world": {"name", "rulesVersion", "params", ...writeHeader}, "seed", "dt", "recordEvery", "teams": [{"name", "planHash", "players": [{"name", "id"}]}]}`.
+1. Header: `{"format": "alica-sim-replay", "version": 1, "match": <the resolved match config>, "provenance": {...}, "world": {"name", "rulesVersion", ...writeHeader}}`.
 2. One line per recorded frame: `{"t": <seconds>, "tick": <n>, ...writeFrame}`.
 3. Last line: `{"result": {...writeResult}, "ticks": <n>}`.
 
-`planHash` is a SHA-256 over the team's compiled plan files, in sorted path order.
+`match` is the whole match config after defaults and path resolution: world plugin and params,
+seed, dt, duration, recordEvery, engine options, and every team with its role set, master plan
+and players with their params. `provenance` identifies everything else the result depends on:
+the `alica_sim` version and build id, and a SHA-256 of each team's compiled plan files (sorted
+by path) and of every library the match loaded (the world plugin and each behaviour, condition
+and utility library), keyed by file name.
 
 ### Match config
 
@@ -225,6 +247,9 @@ Relative paths are resolved against the config file's folder.
 - MessageBus: no self-delivery, send order, messages posted during delivery wait, teams isolated.
 - An engine on the sim clock: a test world and the `alica_tests` behaviours; plan transitions
   happen at the expected match times.
+- Fast path: with `Alica.SimulatedTime`, a behaviour that succeeds in its first `run()`
+  triggers its transition at the next engine iteration, and a match of four agents at 30 Hz
+  runs at least 50 times faster than real time.
 - Determinism: one match run twice, and at speed 0 and 1, gives identical replays.
 - Threads: the engine starts no thread during a match (checked by counting threads on Linux and
   macOS before and after start).
