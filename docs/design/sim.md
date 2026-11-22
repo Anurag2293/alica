@@ -261,7 +261,9 @@ callback runs before them, so nothing consumes an input earlier than its time:
 `stop()` called during a tick (from a behaviour, a message handler or `world.step`) halts the
 scheduler, so no further entry fires, skips the tick's remaining phases and its frame (the tick
 counts only if `world.step` ran), and stops the match when the tick returns: agents terminate,
-the result line is the last line and `finished()` is true. Outside a tick it stops at once.
+the result line is the last line and `finished()` is true. Outside a tick it stops at once,
+including after a tick that threw: the in-tick state is cleared on every exit path, so a host
+that catches the exception can still call `stop()` to terminate the agents and write the result.
 
 Agents are created and started in config order: teams in order, players in order.
 
@@ -376,6 +378,8 @@ at least 1 ns, `duration` at least `dt`, both at most 4e9 s; infinity and NaN ar
 - A behaviour that stops the match from `init` ends it at once: no later entry fires, no frame
   follows, and the result line is last.
 - A replay write or flush failure, including a file size limit in the runner, fails the match.
+- A host that catches an exception thrown from a behaviour during a tick can still stop the
+  match: the agents terminate and the result line is last.
 - A placeholder in the plan tree (`alica_tests/etc`, `PlaceholderTestPlan`) makes the runner exit
   1 with a config error.
 

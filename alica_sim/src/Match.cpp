@@ -185,27 +185,32 @@ void Match::tick()
     if (!_started || _stopped) {
         return;
     }
-    _ticking = true;
-    const AlicaTime t = _config.dt * _tick;
-    _time.set(t);
-    for (auto& bus : _buses) {
-        bus->deliver();
-    }
-    if (!_stopRequested) {
-        _world->sense(t);
-    }
-    if (!_stopRequested) {
-        _scheduler.runUntil(t + _config.dt);
-    }
-    if (!_stopRequested) {
-        _world->step(t, _config.dt);
-        ++_tick;
-        _time.set(_config.dt * _tick);
-        if (!_stopRequested && _tick % _config.recordEvery == 0) {
-            recordFrame();
+    {
+        struct ClearOnExit
+        {
+            bool& flag;
+            ~ClearOnExit() { flag = false; }
+        } ticking{_ticking = true};
+        const AlicaTime t = _config.dt * _tick;
+        _time.set(t);
+        for (auto& bus : _buses) {
+            bus->deliver();
+        }
+        if (!_stopRequested) {
+            _world->sense(t);
+        }
+        if (!_stopRequested) {
+            _scheduler.runUntil(t + _config.dt);
+        }
+        if (!_stopRequested) {
+            _world->step(t, _config.dt);
+            ++_tick;
+            _time.set(_config.dt * _tick);
+            if (!_stopRequested && _tick % _config.recordEvery == 0) {
+                recordFrame();
+            }
         }
     }
-    _ticking = false;
     if (_stopRequested) {
         stop();
     }

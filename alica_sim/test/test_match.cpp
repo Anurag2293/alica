@@ -501,6 +501,36 @@ TEST(MatchTest, AStopFromABehaviourEndsTheMatchCleanly)
     EXPECT_EQ(YAML::Load(all.back())["ticks"].as<int>(), 3);
 }
 
+TEST(MatchTest, AStopAfterATickThrewEndsTheMatch)
+{
+    std::ostringstream replay;
+    auto match = makeMatch(testConfig(1, 2, 1.5), &replay);
+    match->start();
+    io(*match, "t0p0").onEvent = [](const std::string& what) {
+        if (what == "Walk.init") {
+            throw std::runtime_error("behaviour failed");
+        }
+    };
+    EXPECT_THROW(
+            {
+                while (!match->finished()) {
+                    match->tick();
+                }
+            },
+            std::runtime_error);
+    match->stop();
+    EXPECT_FALSE(match->agent("t0p0").running());
+    EXPECT_FALSE(match->agent("t0p1").running());
+    EXPECT_TRUE(match->finished());
+    EXPECT_FALSE(match->resultLine().empty());
+    std::istringstream lines(replay.str());
+    std::string last;
+    for (std::string line; std::getline(lines, line);) {
+        last = line;
+    }
+    EXPECT_EQ(last, match->resultLine());
+}
+
 TEST(MatchTest, APlayerWithoutARoleIsAConfigError)
 {
     MatchConfig config = testConfig(1, 1, 1);
