@@ -53,5 +53,6 @@ MatchConfig loadMatchConfig(const std::string& path);
 MatchConfig parseMatchConfig(const YAML::Node& root, const std::string& baseDir);
 void writeMatchConfigFields(JsonWriter& w, const MatchConfig& config);
 YAML::Node engineConfig(const MatchConfig& config, const PlayerConfig& player);
+void validateEngineConfig(const YAML::Node& engine, const std::string& where);
 
 } // namespace alica::sim

@@ -85,6 +85,7 @@ if(BUILD_TESTING)
     test/test_match.cpp
     test/test_message_bus.cpp
     test/test_plan_files.cpp
+    test/test_runner.cpp
     test/test_scheduler.cpp
     test/test_util.cpp
   )
@@ -92,9 +93,10 @@ if(BUILD_TESTING)
     ALICA_SIM_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test"
     ALICA_SIM_TEST_WORLD_DIR="$<TARGET_FILE_DIR:alica_sim_test_world>"
     ALICA_SIM_TEST_TEAM_DIR="$<TARGET_FILE_DIR:alica_sim_test_team>"
+    ALICA_SIM_RUN="$<TARGET_FILE:alica_sim_run>"
   )
   target_link_libraries(${PROJECT_NAME}-test PRIVATE ${PROJECT_NAME} GTest::gtest GTest::gtest_main Threads::Threads)
-  add_dependencies(${PROJECT_NAME}-test alica_sim_test_world alica_sim_test_team)
+  add_dependencies(${PROJECT_NAME}-test alica_sim_test_world alica_sim_test_team alica_sim_run)
   gtest_discover_tests(${PROJECT_NAME}-test)
 
   add_test(NAME alica_sim_run_test

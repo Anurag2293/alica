@@ -304,6 +304,30 @@ void writeMatchConfigFields(JsonWriter& w, const MatchConfig& config)
     w.endArray();
 }
 
+void validateEngineConfig(const YAML::Node& engine, const std::string& where)
+{
+    const YAML::Node alica = engine["Alica"];
+    try {
+        const double frequency = alica["EngineFrequency"].as<double>();
+        const double minBroadcast = alica["MinBroadcastFrequency"].as<double>();
+        const double maxBroadcast = alica["MaxBroadcastFrequency"].as<double>();
+        if (!(frequency > 0 && frequency <= 1000)) {
+            throw ConfigError(where + ": Alica.EngineFrequency must be in (0, 1000]");
+        }
+        if (!(minBroadcast > 0 && minBroadcast <= maxBroadcast && maxBroadcast <= frequency)) {
+            throw ConfigError(where + ": need 0 < Alica.MinBroadcastFrequency <= Alica.MaxBroadcastFrequency <= Alica.EngineFrequency");
+        }
+        if (alica["StatusMessages"]["Enabled"].as<bool>() && !(alica["StatusMessages"]["Frequency"].as<double>() <= frequency)) {
+            throw ConfigError(where + ": Alica.StatusMessages.Frequency must not exceed Alica.EngineFrequency");
+        }
+        if (!alica["UseStaticRoles"].as<bool>()) {
+            throw ConfigError(where + ": Alica.UseStaticRoles must be true");
+        }
+    } catch (const YAML::Exception& e) {
+        throw ConfigError(where + ": invalid engine option: " + e.what());
+    }
+}
+
 YAML::Node engineConfig(const MatchConfig& config, const PlayerConfig& player)
 {
     YAML::Node root = YAML::Load(kEngineDefaults);

@@ -45,6 +45,40 @@ void rejectEngineConfig(const TeamConfig& team)
     }
 }
 
+void validateTeam(const TeamConfig& team)
+{
+    rejectEngineConfig(team);
+    if (findPlanFile(team.plans, team.masterPlan + ".pml").empty()) {
+        throw ConfigError("team " + team.name + ": master plan " + team.masterPlan + ".pml is not in its plan folders");
+    }
+    try {
+        planTreeLibraries(team.plans, team.masterPlan);
+    } catch (const ConfigError& e) {
+        throw ConfigError("team " + team.name + ": " + e.what());
+    }
+}
+
+void checkRole(const TeamConfig& team, const PlayerConfig& player, const YAML::Node& engine)
+{
+    const std::string where = "team " + team.name + " player " + player.name;
+    const YAML::Node role = engine["Local"]["DefaultRole"];
+    if (!role || !role.IsScalar()) {
+        throw ConfigError(where + ": 'local.DefaultRole' is missing");
+    }
+    const std::string roleSetFile = findRoleSetFile(team.plans, team.roleSet);
+    if (roleSetFile.empty()) {
+        throw ConfigError("team " + team.name + ": role set " + team.roleSet + ".rst is not in its plan folders and none of them has a default role set");
+    }
+    const std::set<std::string> roles = roleNames(roleSetFile);
+    if (!roles.count(role.Scalar())) {
+        std::string known;
+        for (const std::string& r : roles) {
+            known += (known.empty() ? "" : ", ") + r;
+        }
+        throw ConfigError(where + ": role " + role.Scalar() + " is not in " + roleSetFile + " (roles: " + known + ")");
+    }
+}
+
 std::string makeTempDir()
 {
     std::string pattern = (fs::temp_directory_path() / "alica_sim.XXXXXX").string();
@@ -100,8 +134,14 @@ void Match::start()
         return;
     }
     _started = true;
+    std::vector<YAML::Node> engineConfigs;
     for (const TeamConfig& team : _config.teams) {
-        rejectEngineConfig(team);
+        validateTeam(team);
+        for (const PlayerConfig& player : team.players) {
+            engineConfigs.push_back(engineConfig(_config, player));
+            validateEngineConfig(engineConfigs.back(), "team " + team.name + " player " + player.name);
+            checkRole(team, player, engineConfigs.back());
+        }
     }
     if (_options.workDir.empty()) {
         _workDir = makeTempDir();
@@ -120,10 +160,7 @@ void Match::start()
         _factories.push_back(_makeTeamFactory(team));
         for (size_t playerIndex = 0; playerIndex < team.players.size(); ++playerIndex) {
             const PlayerConfig& player = team.players[playerIndex];
-            YAML::Node engine = engineConfig(_config, player);
-            if (!engine["Local"]["DefaultRole"]) {
-                throw ConfigError("team " + team.name + " player " + player.name + ": 'local.DefaultRole' is missing");
-            }
+            const YAML::Node& engine = engineConfigs[owner];
             YAML::Emitter emitter;
             emitter << engine;
             const fs::path configRoot = fs::path(_workDir) / std::to_string(owner);

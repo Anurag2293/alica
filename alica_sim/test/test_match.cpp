@@ -187,6 +187,69 @@ TEST(MatchTest, AnAlicaYamlInAPlanFolderIsAConfigError)
     fs::remove_all(dir);
 }
 
+fs::path copyPlans(const std::string& name)
+{
+    const fs::path dir = fs::temp_directory_path() / ("alica_sim_test_plans_" + name);
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    fs::copy(fs::path(ALICA_SIM_TEST_DIR) / "team/plans", dir, fs::copy_options::recursive);
+    return dir;
+}
+
+TEST(MatchTest, AnUnknownRoleIsAConfigError)
+{
+    MatchConfig config = testConfig(1, 1, 1);
+    config.teams[0].players[0].local["DefaultRole"] = "Goalie";
+    auto match = makeMatch(config);
+    EXPECT_THROW(match->start(), ConfigError);
+}
+
+TEST(MatchTest, AMissingMasterPlanIsAConfigError)
+{
+    MatchConfig config = testConfig(1, 1, 1);
+    config.teams[0].masterPlan = "Nope";
+    auto match = makeMatch(config);
+    EXPECT_THROW(match->start(), ConfigError);
+}
+
+TEST(MatchTest, AMissingRoleSetIsAConfigError)
+{
+    const fs::path dir = copyPlans("without_role_set");
+    fs::remove(dir / "RoleSet.rst");
+    auto match = makeMatch(testConfig(1, 1, 1, dir.string()));
+    EXPECT_THROW(match->start(), ConfigError);
+    fs::remove_all(dir);
+}
+
+TEST(MatchTest, AMissingPlanTreeFileIsAConfigError)
+{
+    const fs::path dir = copyPlans("without_walk");
+    fs::remove(dir / "Walk.beh");
+    auto match = makeMatch(testConfig(1, 1, 1, dir.string()));
+    EXPECT_THROW(match->start(), ConfigError);
+    fs::remove_all(dir);
+}
+
+TEST(MatchTest, AnInvalidEngineOptionIsAConfigError)
+{
+    MatchConfig config = testConfig(1, 1, 1);
+    config.engine.emplace_back("Alica.EngineFrequency", YAML::Node(2000));
+    auto match = makeMatch(config);
+    EXPECT_THROW(match->start(), ConfigError);
+}
+
+TEST(MatchTest, AnUnusedPlanWithAnUnknownLibraryDoesNotStopTheMatch)
+{
+    const fs::path dir = copyPlans("with_unused_plan");
+    std::ofstream(dir / "Old.pml") << R"({"id": 1, "name": "Old", "libraryName": "retired_lib", "states": []})";
+    std::ostringstream replay;
+    auto match = makeMatch(testConfig(1, 1, 0.2, dir.string()), &replay);
+    runMatch(*match, 0);
+    EXPECT_EQ(match->ticks(), 20);
+    EXPECT_EQ(replay.str().find("retired_lib"), std::string::npos);
+    fs::remove_all(dir);
+}
+
 TEST(MatchTest, APlayerWithoutARoleIsAConfigError)
 {
     MatchConfig config = testConfig(1, 1, 1);
