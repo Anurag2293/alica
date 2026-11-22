@@ -77,6 +77,7 @@ public:
     void cancel(uint64_t id);                                 // safe from inside a callback
     void runUntil(AlicaTime end);  // fires every entry due before end, in order of
                                    // (due time, owner, creation sequence); due += period
+    void defer(std::function<void()> action);  // after the current callback, or now outside one
 };
 
 class SimTimer : public alica::IAlicaTimer { /* cancels its entry on destruction */ };
@@ -98,6 +99,9 @@ public:
   sequence) order, and cannot fire twice at one due time because the period is positive.
 - A cancelled entry never fires again, even if it was already collected for this pass.
 - A period of zero is rejected.
+- `Agent::stop` goes through `defer`: an agent stopped from inside a callback (a behaviour, a
+  condition, another agent's callback) terminates its engine right after that callback returns,
+  never with the callback still on the stack.
 
 ### MessageBus, SimCommunication
 
@@ -175,9 +179,19 @@ team's folders:
   `<agent>/Alica.yaml` before anything else. Each root holds only one agent's file, so the
   recursive lookup cannot find another agent's config. `<work>` is a temporary folder removed
   with the match unless the runner is given `--work DIR`.
-- `local.DefaultRole` is required; the engine aborts on a missing role, so the match reports it
-  as a config error first.
+- The engine calls `std::abort` on a missing master plan, plan tree file or role set, on an
+  unknown default role and on engine options it rejects. Before it creates the work folder,
+  configures the world or starts any engine, `Match::start` checks all of them for every team
+  and player with the engine's own lookup rules, and reports a config error instead: the master
+  plan and every file the tree references exist in the plan folders, the role set exists (the
+  named `.rst` file, or else a `defaultRoleSet` file directly in a plan folder), every player's
+  `local.DefaultRole` is a role in it, `0 < EngineFrequency <= 1000`,
+  `0 < MinBroadcastFrequency <= MaxBroadcastFrequency <= EngineFrequency`, the status message
+  frequency does not exceed the engine frequency and `UseStaticRoles` is true.
 - An `Alica.yaml` in a team's plan folders is a config error.
+- Plan folders are searched like the engine's `FileSystem::findFile`: depth first in name order,
+  following symlinked directories. A directory that is already one of the current ancestors is
+  skipped, so a symlink cycle ends.
 - Engine settings are match-wide. Some are process-wide statics in the engine
   (`Alica.AllowIdling`, `Alica.AssignmentProtectionTime`), so per-team values would silently
   leak between teams; only `local` differs per player.
@@ -186,7 +200,8 @@ team's folders:
 class TeamFactory {
 public:
     virtual ~TeamFactory() = default;
-    virtual AlicaCreators creators() = 0;   // called once per agent
+    virtual AlicaCreators creators() = 0;   // called once per agent; the agent keeps them until
+                                            // its engine is destroyed
     virtual std::vector<std::pair<std::string, std::string>> libraries() const { return {}; }
 };                                          // library name and resolved file, for provenance
 ```
@@ -195,8 +210,9 @@ The runner's default `TeamFactory`, `DynamicTeamFactory`, uses `alica_dynamic_lo
 loads behaviour, condition and utility libraries by the `libraryName` in the plans. Its
 creators read their search path from `LD_LIBRARY_PATH` when they are constructed, so the
 factory sets it to the team's `libraries` followed by the inherited value while it builds them,
-then restores it. `libraries()` collects every `libraryName` in the team's plan files and
-resolves it the same way.
+then restores it. `libraries()` collects the `libraryName` of every plan and behaviour in the
+master plan's tree, and of the conditions the tree references, and resolves each the same way.
+Other compiled plans in the folders are ignored.
 
 ### Match
 
@@ -252,6 +268,9 @@ by path) and of every library the match loaded (the world plugin and each behavi
 and utility library), keyed by team and library name, with the resolved path. Each agent's
 generated `Alica.yaml` is included under `match` as `effectiveConfig`, keyed by player name.
 `match.engine` holds the match's `engine` section as written, flattened to dotted keys.
+`dt`, `duration` and the frames' `t` are exact decimals of the integer nanoseconds (for example
+`0.016666666`), so the header parses back to the same ticks. A failed write or flush of the
+replay stops the match with an error.
 
 ```json
 "provenance": {
@@ -292,6 +311,10 @@ are required. The defaults are `seed: 0`, `dt: 0.01`, `recordEvery: 1`, `roleSet
 no `libraries`, and empty `params` and `local`. `engine` takes dotted keys, nested mappings or
 both. Team names are unique.
 
+`dt` and `duration` become integer nanoseconds: a plain decimal digit by digit, rounded at the
+tenth fractional digit, any other number through a double. The checks run on the result: `dt`
+at least 1 ns, `duration` at least `dt`, both at most 4e9 s; infinity and NaN are config errors.
+
 ### Runner
 
 `alica_sim_run MATCH.yaml [--out replay.jsonl] [--plugin-path DIR]... [--speed X] [--seed N] [--work DIR]`
@@ -301,7 +324,7 @@ both. Team names are unique.
 - The world plugin `lib<plugin>.so` (`.dylib` on macOS) is looked up in the `--plugin-path`
   folders, by default the config file's folder.
 - Prints the result line to stdout and exits 0 when the match completes; exits 1 on a config,
-  load or engine error and 2 on a usage error. Engine logs go to stderr, so stdout holds only the
+  load, engine or replay write error and 2 on a usage error. Engine logs go to stderr, so stdout holds only the
   result line.
 
 ## Tests
@@ -321,6 +344,15 @@ both. Team names are unique.
 - Threads: the engine starts no thread during a match (checked by counting threads on Linux and
   macOS before and after start).
 - The runner runs a two-team match end to end and prints the result line.
+- Config errors (unknown role, missing master plan, plan tree file or role set, invalid engine
+  options) are reported before any engine starts; the runner exits 1 instead of aborting.
+- Plan folders: symlinked directories are followed, a symlink cycle ends, and an unused plan
+  with an unknown library does not stop a match.
+- Times: dt and duration are exact nanoseconds and survive a round trip through the header.
+- Non-finite numbers are detected by a test compiled with `-O2 -ffast-math`.
+- The creators live until the engine is destroyed; an agent that stops itself from a behaviour
+  stops after that callback.
+- A replay write or flush failure, including a file size limit in the runner, fails the match.
 
 ## Later
 
