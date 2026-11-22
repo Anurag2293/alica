@@ -127,6 +127,7 @@ private:
     int _treeDepth;
     std::atomic<bool> _running;
     bool _sendStatusMessages;
+    bool _simulatedTime;
     std::atomic<bool> _isWaiting;
 };
 

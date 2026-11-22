@@ -90,6 +90,7 @@ void PlanBase::reload(const YAML::Node& config)
 
     AlicaTime halfLoopTime = _loopTime / 2;
 
+    _simulatedTime = config["Alica"]["SimulatedTime"].as<bool>(false);
     _sendStatusMessages = config["Alica"]["StatusMessages"]["Enabled"].as<bool>();
     if (_sendStatusMessages) {
         double stfreq = config["Alica"]["StatusMessages"]["Frequency"].as<double>();
@@ -261,7 +262,7 @@ void PlanBase::run(const Plan* masterPlan)
 
     AlicaTime availTime = _loopTime - (now - beginTime);
     bool checkFp = false;
-    if (availTime > AlicaTime::milliseconds(1)) {
+    if (!_simulatedTime && availTime > AlicaTime::milliseconds(1)) {
         std::unique_lock<std::mutex> lock(_lomutex);
         checkFp = std::cv_status::no_timeout == _fpEventWait.wait_for(lock, std::chrono::nanoseconds(availTime.inNanoseconds()));
     }
