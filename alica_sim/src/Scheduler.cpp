@@ -1,4 +1,5 @@
 #include "alica_sim/Scheduler.h"
+#include "alica_sim/SimLogger.h"
 
 #include <stdexcept>
 
@@ -69,7 +70,11 @@ void Scheduler::defer(std::function<void()> action)
 
 std::unique_ptr<IAlicaTimer> SimTimerFactory::createTimer(IAlicaTimer::TimerCb cb, AlicaTime period) const
 {
-    return std::make_unique<SimTimer>(_scheduler, _scheduler.add(std::move(cb), period, _owner));
+    auto named = [cb = std::move(cb), name = _agentName]() {
+        SimLogger::AgentScope scope(name);
+        cb();
+    };
+    return std::make_unique<SimTimer>(_scheduler, _scheduler.add(std::move(named), period, _owner));
 }
 
 } // namespace alica::sim

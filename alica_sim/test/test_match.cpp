@@ -5,6 +5,7 @@
 
 #include <engine/IUtilityCreator.h>
 #include <engine/blackboard/Blackboard.h>
+#include <engine/logging/Logging.h>
 
 #include <gtest/gtest.h>
 #include <yaml-cpp/yaml.h>
@@ -411,6 +412,43 @@ TEST(MatchTest, TwoAgentsStoppingEachOtherWhileTerminatingFinishCleanly)
     EXPECT_EQ(terminations, 2);
     EXPECT_FALSE(first.running());
     EXPECT_FALSE(second.running());
+}
+
+bool hasLine(const std::string& log, const std::string& prefix, const std::string& text)
+{
+    std::istringstream lines(log);
+    for (std::string line; std::getline(lines, line);) {
+        if (line.rfind(prefix, 0) == 0 && line.find(text) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+TEST(MatchTest, LogLinesCarryTheNameOfTheAgentThatWroteThem)
+{
+    MatchConfig config = testConfig(1, 2, 0.5);
+    config.engine.emplace_back("Alica.Logging.Verbosity", YAML::Node("INFO"));
+    auto match = makeMatch(config);
+    testing::internal::CaptureStdout();
+    testing::internal::CaptureStderr();
+    match->start();
+    for (const char* agent : {"t0p0", "t0p1"}) {
+        io(*match, agent).onEvent = [agent](const std::string& what) { Logging::logWarn("SimLoggerTest") << agent << " " << what; };
+    }
+    while (!match->finished()) {
+        match->tick();
+    }
+    match->stop();
+    const std::string out = testing::internal::GetCapturedStdout();
+    const std::string err = testing::internal::GetCapturedStderr();
+    for (const std::string agent : {"t0p0", "t0p1"}) {
+        const std::string other = agent == "t0p0" ? "t0p1" : "t0p0";
+        EXPECT_TRUE(hasLine(out, "[INFO][" + agent + "]", "Engine started!")) << out;
+        EXPECT_TRUE(hasLine(err, "[WARNING][" + agent + "][SimLoggerTest]: ", agent + " Walk.init")) << err;
+        EXPECT_TRUE(hasLine(err, "[WARNING][" + agent + "][SimLoggerTest]: ", agent + " Walk.terminate")) << err;
+        EXPECT_FALSE(hasLine(err, "[WARNING][" + other + "][SimLoggerTest]: ", agent + " ")) << err;
+    }
 }
 
 TEST(MatchTest, APlayerWithoutARoleIsAConfigError)

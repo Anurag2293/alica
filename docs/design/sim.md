@@ -165,8 +165,11 @@ extern "C" alica::sim::World* alica_sim_create_world();  // exported by a plugin
 
 Owns one `AlicaContext` with: agent name and id; the team's plan folders as config paths; the
 team's role set and master plan; `stepEngine = false`; the shared `SimClock`; a `SimTimerFactory`
-for both timer factories; `SimCommunication` on the team's bus; the engine's default logger,
-whose verbosity defaults to `WARNING` in the generated config. Creators come from the
+for both timer factories; `SimCommunication` on the team's bus; and `SimLogger`, whose
+verbosity defaults to `WARNING` in the generated config. The engine keeps one process-wide
+logger, stamped with the name of the last agent that set it, so `SimLogger` instead stamps each
+line with the agent whose code is running: the owner of the timer callback or message delivery
+in progress, or the agent being created, started, stopped or destroyed. Creators come from the
 team's `TeamFactory`. The agent's engine configuration is generated, never read from a
 team's folders:
 
@@ -357,7 +360,9 @@ at least 1 ns, `duration` at least `dt`, both at most 4e9 s; infinity and NaN ar
 - Times: dt and duration are exact nanoseconds and survive a round trip through the header.
 - Non-finite numbers are detected by a test compiled with `-O2 -ffast-math`.
 - The creators live until the engine is destroyed; an agent that stops itself from a behaviour
-  stops after that callback.
+  stops after that callback; agents that stop themselves or each other from `onTermination`
+  finish cleanly.
+- Logging: with two agents, each agent's log lines carry its own name.
 - A replay write or flush failure, including a file size limit in the runner, fails the match.
 
 ## Later

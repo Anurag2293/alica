@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <queue>
+#include <string>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
@@ -70,9 +71,10 @@ private:
 class SimTimerFactory : public IAlicaTimerFactory
 {
 public:
-    SimTimerFactory(Scheduler& scheduler, int owner)
+    SimTimerFactory(Scheduler& scheduler, int owner, std::string agentName = "")
             : _scheduler(scheduler)
             , _owner(owner)
+            , _agentName(std::move(agentName))
     {
     }
     std::unique_ptr<IAlicaTimer> createTimer(IAlicaTimer::TimerCb cb, AlicaTime period) const override;
@@ -80,6 +82,7 @@ public:
 private:
     Scheduler& _scheduler;
     int _owner;
+    std::string _agentName;
 };
 
 } // namespace alica::sim

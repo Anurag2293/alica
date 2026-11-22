@@ -41,6 +41,7 @@ add_library(${PROJECT_NAME} SHARED
   src/Runner.cpp
   src/Scheduler.cpp
   src/Sha256.cpp
+  src/SimLogger.cpp
 )
 
 set_source_files_properties(src/Numeric.cpp PROPERTIES COMPILE_OPTIONS -fno-finite-math-only)

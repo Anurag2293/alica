@@ -1,4 +1,5 @@
 #include "alica_sim/MessageBus.h"
+#include "alica_sim/SimLogger.h"
 
 #include <memory>
 
@@ -41,9 +42,9 @@ struct Dispatch
 
 } // namespace
 
-int MessageBus::join(const AlicaCommunicationHandlers& handlers)
+int MessageBus::join(const AlicaCommunicationHandlers& handlers, const std::string& agentName)
 {
-    _members.push_back(std::make_shared<const AlicaCommunicationHandlers>(handlers));
+    _members.push_back(std::make_shared<const Member>(Member{handlers, agentName}));
     return static_cast<int>(_members.size()) - 1;
 }
 
@@ -68,8 +69,9 @@ void MessageBus::deliver()
             if (static_cast<int>(i) == sender || !_members[i]) {
                 continue;
             }
-            std::shared_ptr<const AlicaCommunicationHandlers> handlers = _members[i];
-            std::visit(Dispatch{*handlers}, msg);
+            std::shared_ptr<const Member> member = _members[i];
+            SimLogger::AgentScope scope(member->agentName);
+            std::visit(Dispatch{member->handlers}, msg);
         }
     }
 }
@@ -77,7 +79,7 @@ void MessageBus::deliver()
 void SimCommunication::startCommunication()
 {
     if (_member < 0) {
-        _member = _bus.join(_callbacks);
+        _member = _bus.join(_callbacks, _agentName);
     }
 }
 

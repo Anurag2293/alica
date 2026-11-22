@@ -13,6 +13,7 @@
 
 #include <deque>
 #include <memory>
+#include <string>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -26,7 +27,7 @@ using AlicaMessage =
 class MessageBus
 {
 public:
-    int join(const AlicaCommunicationHandlers& handlers);
+    int join(const AlicaCommunicationHandlers& handlers, const std::string& agentName = "");
     void leave(int member);
     void post(int sender, AlicaMessage msg);
     void deliver();
@@ -34,16 +35,23 @@ public:
     size_t pending() const { return _queue.size(); }
 
 private:
-    std::vector<std::shared_ptr<const AlicaCommunicationHandlers>> _members;
+    struct Member
+    {
+        AlicaCommunicationHandlers handlers;
+        std::string agentName;
+    };
+
+    std::vector<std::shared_ptr<const Member>> _members;
     std::deque<std::pair<int, AlicaMessage>> _queue;
 };
 
 class SimCommunication : public IAlicaCommunication
 {
 public:
-    SimCommunication(const AlicaCommunicationHandlers& handlers, MessageBus& bus)
+    SimCommunication(const AlicaCommunicationHandlers& handlers, MessageBus& bus, std::string agentName = "")
             : IAlicaCommunication(handlers)
             , _bus(bus)
+            , _agentName(std::move(agentName))
     {
     }
 
@@ -64,6 +72,7 @@ private:
     void post(AlicaMessage msg) const;
 
     MessageBus& _bus;
+    std::string _agentName;
     int _member = -1;
 };
 
